@@ -19,13 +19,18 @@
 <script>
 (function(){
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">'
-    +'<rect width="180" height="180" rx="40" fill="#c06840"/>'
-    +'<circle cx="90" cy="80" r="3" fill="#fffbf6" opacity=".9"/>'
-    +'<path d="M90 80 C100 80,108 88,108 98 C108 108,100 116,90 116 C80 116,72 108,72 98 C72 88,80 80,90 80" fill="none" stroke="#fffbf6" stroke-width="2.2" opacity=".85"/>'
-    +'<path d="M90 80 C110 75,125 88,125 105 C125 125,110 140,90 140 C65 140,50 120,50 98 C50 72,70 56,90 60" fill="none" stroke="#fffbf6" stroke-width="1.6" opacity=".5"/>'
-    +'<path d="M90 60 C120 55,145 75,145 105 C145 138,120 155,90 155 C55 155,35 130,35 98 C35 62,60 42,90 45" fill="none" stroke="#fffbf6" stroke-width="1.1" opacity=".25"/>'
-    +'<g transform="translate(90,80) rotate(225)"><rect x="-1.8" y="0" width="3.6" height="18" rx="1.2" fill="#fffbf6" opacity=".9"/>'
-    +'<path d="M0 18 L-2.5 23 L0 20.5 L2.5 23 Z" fill="#fffbf6" opacity=".9"/></g></svg>';
+    +'<rect width="180" height="180" rx="40" fill="#f7f3ee"/>'
+    +'<rect x="38" y="78" width="68" height="48" rx="4" fill="#c06840" opacity=".18"/>'
+    +'<rect x="46" y="68" width="68" height="48" rx="4" fill="#c06840" opacity=".30"/>'
+    +'<rect x="54" y="58" width="68" height="48" rx="4" fill="#c06840" opacity=".50"/>'
+    +'<rect x="62" y="48" width="68" height="48" rx="4" fill="#c06840" opacity=".75"/>'
+    +'<rect x="70" y="38" width="68" height="48" rx="4" fill="#c06840"/>'
+    +'<line x1="80" y1="50" x2="128" y2="50" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
+    +'<line x1="80" y1="58" x2="122" y2="58" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
+    +'<line x1="80" y1="66" x2="126" y2="66" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
+    +'<line x1="80" y1="74" x2="116" y2="74" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
+    +'<text x="90" y="148" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#c06840" letter-spacing="3" opacity=".5">RENYOU</text>'
+    +'</svg>';
   var img=new Image();
   img.onload=function(){
     try{
@@ -137,6 +142,7 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .dh-b.su{background:#fceae8;color:var(--sun)}
 .dh-b.sa{background:#e8f0f8;color:var(--sat)}
 .dh-b.wd{background:#f0e8de;color:var(--sub)}
+.dh-hol{display:inline-block;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#fceae8;color:var(--sun);margin-left:6px}
 .ec{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden;-webkit-transition:box-shadow .2s;transition:box-shadow .2s}
 .ec-h{padding:14px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between}
 .ec-y{font-size:16px;font-weight:700;color:var(--acc)}
@@ -242,15 +248,17 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 
 <div id="splash">
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
-    <rect width="180" height="180" rx="40" fill="#c06840"/>
-    <circle cx="90" cy="80" r="3" fill="#fffbf6" opacity=".9"/>
-    <path class="sp-path" d="M90 80 C100 80,108 88,108 98 C108 108,100 116,90 116 C80 116,72 108,72 98 C72 88,80 80,90 80" fill="none" stroke="#fffbf6" stroke-width="2.2" opacity=".85"/>
-    <path d="M90 80 C110 75,125 88,125 105 C125 125,110 140,90 140 C65 140,50 120,50 98 C50 72,70 56,90 60" fill="none" stroke="#fffbf6" stroke-width="1.6" opacity=".5"/>
-    <path d="M90 60 C120 55,145 75,145 105 C145 138,120 155,90 155 C55 155,35 130,35 98 C35 62,60 42,90 45" fill="none" stroke="#fffbf6" stroke-width="1.1" opacity=".25"/>
-    <g transform="translate(90,80) rotate(225)">
-      <rect x="-1.8" y="0" width="3.6" height="18" rx="1.2" fill="#fffbf6" opacity=".9"/>
-      <path d="M0 18 L-2.5 23 L0 20.5 L2.5 23 Z" fill="#fffbf6" opacity=".9"/>
-    </g>
+    <rect width="180" height="180" rx="40" fill="#f7f3ee"/>
+    <rect x="38" y="78" width="68" height="48" rx="4" fill="#c06840" opacity=".18"/>
+    <rect x="46" y="68" width="68" height="48" rx="4" fill="#c06840" opacity=".30"/>
+    <rect x="54" y="58" width="68" height="48" rx="4" fill="#c06840" opacity=".50"/>
+    <rect x="62" y="48" width="68" height="48" rx="4" fill="#c06840" opacity=".75"/>
+    <rect x="70" y="38" width="68" height="48" rx="4" fill="#c06840"/>
+    <line x1="80" y1="50" x2="128" y2="50" stroke="#fff" stroke-width="0.8" opacity=".5"/>
+    <line x1="80" y1="58" x2="122" y2="58" stroke="#fff" stroke-width="0.8" opacity=".5"/>
+    <line x1="80" y1="66" x2="126" y2="66" stroke="#fff" stroke-width="0.8" opacity=".5"/>
+    <line x1="80" y1="74" x2="116" y2="74" stroke="#fff" stroke-width="0.8" opacity=".5"/>
+    <text x="90" y="148" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#c06840" letter-spacing="3" opacity=".5">RENYOU</text>
   </svg>
   <div class="sp-title">連用日記</div>
   <div class="sp-bar-wrap"><div class="sp-bar" id="sp-bar"></div></div>
@@ -263,7 +271,7 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 </div>
 
 <div class="hdr">
-  <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" style="width:28px;height:28px;vertical-align:middle;margin-right:8px;border-radius:6px"><rect width="180" height="180" rx="40" fill="#c06840"/><path d="M90 38C130 38,152 60,152 90C152 120,130 152,90 152C55 152,38 125,38 95C38 68,58 50,82 50C104 50,120 64,120 86C120 106,106 118,88 118C72 118,60 106,60 92C60 80,70 72,82 72C93 72,102 80,102 90C102 99,96 104,89 104" fill="none" stroke="#fffbf6" stroke-width="3.2" stroke-linecap="round" opacity=".95"/><circle cx="89" cy="104" r="2.8" fill="#fffbf6" opacity=".95"/><g transform="translate(89,104) rotate(135)"><path d="M0 0L-1.5-9L0-7.5L1.5-9Z" fill="#fffbf6"/><rect x="-1.2" y="-19" width="2.4" height="11" rx=".8" fill="#fffbf6" opacity=".85"/></g></svg>連用日記</h1>
+  <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" style="width:28px;height:28px;vertical-align:middle;margin-right:8px;border-radius:6px"><rect width="180" height="180" rx="40" fill="#f7f3ee"/><rect x="38" y="78" width="68" height="48" rx="4" fill="#c06840" opacity=".18"/><rect x="46" y="68" width="68" height="48" rx="4" fill="#c06840" opacity=".30"/><rect x="54" y="58" width="68" height="48" rx="4" fill="#c06840" opacity=".50"/><rect x="62" y="48" width="68" height="48" rx="4" fill="#c06840" opacity=".75"/><rect x="70" y="38" width="68" height="48" rx="4" fill="#c06840"/><line x1="80" y1="50" x2="128" y2="50" stroke="#fff" stroke-width="0.8" opacity=".5"/><line x1="80" y1="58" x2="122" y2="58" stroke="#fff" stroke-width="0.8" opacity=".5"/><line x1="80" y1="66" x2="126" y2="66" stroke="#fff" stroke-width="0.8" opacity=".5"/><line x1="80" y1="74" x2="116" y2="74" stroke="#fff" stroke-width="0.8" opacity=".5"/></svg>連用日記</h1>
   <div class="hdr-btns">
     <button class="sync-btn tap" id="btn-sync"><span class="sdot off" id="sdot"></span>同期</button>
     <button class="hdr-btn tap" id="btn-data">&#128190; データ</button>
@@ -529,7 +537,39 @@ var isDraw=false,svTm=null;
 var WD=["日","月","火","水","木","金","土"];
 var WDC=["su","wd","wd","wd","wd","wd","sa"];
 var pen={style:"ballpoint",color:"#1a1a1a",width:2,mode:"pen",eraserSize:20};
-var palmReject=false; // Apple Pencil検出で自動ONになる
+var palmReject=true; // デフォルトON
+
+/* === 日本の祝日判定 === */
+function getJPHoliday(y,m,d){
+  var dt=new Date(y,m,d),dw=dt.getDay();
+  function nthDay(mm,n,wd){var c=0;for(var i=1;i<=31;i++){var t=new Date(y,mm,i);if(t.getMonth()!==mm)break;if(t.getDay()===wd){c++;if(c===n)return i}}return 0}
+  function vernalEquinox(yr){if(yr<=1999)return Math.floor(20.8431+0.242194*(yr-1980)-Math.floor((yr-1980)/4));if(yr<=2099)return Math.floor(20.8431+0.242194*(yr-1980)-Math.floor((yr-1980)/4));return Math.floor(21.851+0.242194*(yr-1980)-Math.floor((yr-1980)/4))}
+  function autumnalEquinox(yr){if(yr<=1999)return Math.floor(23.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4));if(yr<=2099)return Math.floor(23.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4));return Math.floor(24.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4))}
+  if(m===0&&d===1)return "元日";
+  if(m===0&&d===nthDay(0,2,1))return "成人の日";
+  if(m===1&&d===11)return "建国記念の日";
+  if(m===1&&d===23&&y>=2020)return "天皇誕生日";
+  if(m===2&&d===vernalEquinox(y))return "春分の日";
+  if(m===3&&d===29)return "昭和の日";
+  if(m===4&&d===3)return "憲法記念日";
+  if(m===4&&d===4)return "みどりの日";
+  if(m===4&&d===5)return "こどもの日";
+  if(m===6&&d===nthDay(6,3,1))return "海の日";
+  if(m===7&&d===11)return "山の日";
+  if(m===8&&d===nthDay(8,3,1))return "敬老の日";
+  if(m===8&&d===autumnalEquinox(y))return "秋分の日";
+  if(m===9&&d===nthDay(9,2,1))return "スポーツの日";
+  if(m===10&&d===3)return "文化の日";
+  if(m===10&&d===23)return "勤労感謝の日";
+  // 振替休日: 祝日が日曜の場合、翌月曜が振替休日
+  if(dw===1){var prev=getJPHoliday(y,m,d-1);if(prev)return "振替休日"}
+  // 国民の休日: 前後が祝日の平日
+  if(dw!==0){var bef=getJPHoliday(y,m,d-1);var aft=getJPHoliday(y,m,d+1);if(bef&&aft&&bef!=="振替休日"&&aft!=="振替休日")return "国民の休日"}
+  // 特別休日
+  if(y===2019&&m===4&&d===1)return "即位の日";
+  if(y===2019&&m===9&&d===22)return "即位礼正殿の儀";
+  return null;
+}
 var _pencilSeen=false;
 function isStylus(touch){return touch&&touch.touchType==="stylus"}
 function autoPalm(e){
@@ -850,10 +890,11 @@ function renderCal(){
     for(i=sd-1;i>=0;i--)h+='<div class="cd ot">'+(pm-i)+"</div>";
     for(var d=1;d<=dim;d++){
       var dt=new Date(cY,cM,d),dw=dt.getDay(),ds=fmt(dt);
+      var hol=getJPHoliday(cY,cM,d);
       var c="cd tap";
       if(ds===ts)c+=" td";if(ds===ss)c+=" sl";
-      if(dw===0)c+=" su";if(dw===6)c+=" sa";
-      h+='<div class="'+c+'" data-d="'+d+'"><span>'+d+"</span>";
+      if(dw===0||hol)c+=" su";if(dw===6&&!hol)c+=" sa";
+      h+='<div class="'+c+'" data-d="'+d+'"'+(hol?' title="'+hol+'"':'')+'><span>'+d+"</span>";
       if(ed[d])h+='<div class="dot"></div>';
       h+="</div>";
     }
@@ -1025,10 +1066,12 @@ function renderDay(){
       h+='<button class="dnb tap" id="btn-pd">&#8592; 前日</button>';
       h+='<button class="dnb tap" id="btn-nd">翌日 &#8594;</button>';
       h+='</div>';
+      var _hol=getJPHoliday(yr,sel.getMonth(),sel.getDate());
       h+='<div class="dh">';
       h+='<span class="dh-d">'+sel.getDate()+'</span>';
       h+='<span class="dh-i">'+yr+'年'+(sel.getMonth()+1)+'月</span>';
-      h+='<span class="dh-b '+WDC[dw]+'">'+WD[dw]+'</span>';
+      h+='<span class="dh-b '+(_hol?"su":WDC[dw])+'">'+WD[dw]+'</span>';
+      if(_hol)h+='<span class="dh-hol">'+_hol+'</span>';
       h+='</div>';
 
       h+='<div class="ec"><div class="ec-h">';
