@@ -20,16 +20,18 @@
 (function(){
     var svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">'
     +'<rect width="180" height="180" rx="40" fill="#f7f3ee"/>'
-    +'<rect x="38" y="78" width="68" height="48" rx="4" fill="#c06840" opacity=".18"/>'
-    +'<rect x="46" y="68" width="68" height="48" rx="4" fill="#c06840" opacity=".30"/>'
-    +'<rect x="54" y="58" width="68" height="48" rx="4" fill="#c06840" opacity=".50"/>'
-    +'<rect x="62" y="48" width="68" height="48" rx="4" fill="#c06840" opacity=".75"/>'
-    +'<rect x="70" y="38" width="68" height="48" rx="4" fill="#c06840"/>'
-    +'<line x1="80" y1="50" x2="128" y2="50" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
-    +'<line x1="80" y1="58" x2="122" y2="58" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
-    +'<line x1="80" y1="66" x2="126" y2="66" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
-    +'<line x1="80" y1="74" x2="116" y2="74" stroke="#fff" stroke-width="0.8" opacity=".5"/>'
-    +'<text x="90" y="148" text-anchor="middle" font-family="sans-serif" font-size="9" fill="#c06840" letter-spacing="3" opacity=".5">RENYOU</text>'
+    +'<rect x="36" y="76" width="72" height="52" rx="5" fill="#c06840" opacity=".15"/>'
+    +'<rect x="44" y="66" width="72" height="52" rx="5" fill="#c06840" opacity=".28"/>'
+    +'<rect x="52" y="56" width="72" height="52" rx="5" fill="#c06840" opacity=".48"/>'
+    +'<rect x="60" y="46" width="72" height="52" rx="5" fill="#c06840" opacity=".72"/>'
+    +'<rect x="68" y="36" width="72" height="52" rx="5" fill="#c06840"/>'
+    +'<line x1="78" y1="48" x2="130" y2="48" stroke="#fff" stroke-width="1" opacity=".5"/>'
+    +'<line x1="78" y1="56" x2="124" y2="56" stroke="#fff" stroke-width="1" opacity=".5"/>'
+    +'<line x1="78" y1="64" x2="128" y2="64" stroke="#fff" stroke-width="1" opacity=".5"/>'
+    +'<line x1="78" y1="72" x2="118" y2="72" stroke="#fff" stroke-width="1" opacity=".5"/>'
+    +'<rect x="60" y="108" width="60" height="3" rx="1.5" fill="#c06840" opacity=".18"/>'
+    +'<rect x="68" y="118" width="44" height="3" rx="1.5" fill="#c06840" opacity=".12"/>'
+    +'<rect x="74" y="128" width="32" height="3" rx="1.5" fill="#c06840" opacity=".08"/>'
     +'</svg>';
   var img=new Image();
   img.onload=function(){
@@ -540,16 +542,15 @@ var pen={style:"ballpoint",color:"#1a1a1a",width:2,mode:"pen",eraserSize:20};
 var palmReject=true; // デフォルトON
 
 /* === 日本の祝日判定 === */
-function getJPHoliday(y,m,d){
-  var dt=new Date(y,m,d),dw=dt.getDay();
+function _jpBase(y,m,d){
   function nthDay(mm,n,wd){var c=0;for(var i=1;i<=31;i++){var t=new Date(y,mm,i);if(t.getMonth()!==mm)break;if(t.getDay()===wd){c++;if(c===n)return i}}return 0}
-  function vernalEquinox(yr){if(yr<=1999)return Math.floor(20.8431+0.242194*(yr-1980)-Math.floor((yr-1980)/4));if(yr<=2099)return Math.floor(20.8431+0.242194*(yr-1980)-Math.floor((yr-1980)/4));return Math.floor(21.851+0.242194*(yr-1980)-Math.floor((yr-1980)/4))}
-  function autumnalEquinox(yr){if(yr<=1999)return Math.floor(23.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4));if(yr<=2099)return Math.floor(23.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4));return Math.floor(24.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4))}
+  function vEq(yr){return Math.floor(20.8431+0.242194*(yr-1980)-Math.floor((yr-1980)/4))}
+  function aEq(yr){return Math.floor(23.2488+0.242194*(yr-1966)-Math.floor((yr-1966)/4))}
   if(m===0&&d===1)return "元日";
   if(m===0&&d===nthDay(0,2,1))return "成人の日";
   if(m===1&&d===11)return "建国記念の日";
   if(m===1&&d===23&&y>=2020)return "天皇誕生日";
-  if(m===2&&d===vernalEquinox(y))return "春分の日";
+  if(m===2&&d===vEq(y))return "春分の日";
   if(m===3&&d===29)return "昭和の日";
   if(m===4&&d===3)return "憲法記念日";
   if(m===4&&d===4)return "みどりの日";
@@ -557,17 +558,20 @@ function getJPHoliday(y,m,d){
   if(m===6&&d===nthDay(6,3,1))return "海の日";
   if(m===7&&d===11)return "山の日";
   if(m===8&&d===nthDay(8,3,1))return "敬老の日";
-  if(m===8&&d===autumnalEquinox(y))return "秋分の日";
+  if(m===8&&d===aEq(y))return "秋分の日";
   if(m===9&&d===nthDay(9,2,1))return "スポーツの日";
   if(m===10&&d===3)return "文化の日";
   if(m===10&&d===23)return "勤労感謝の日";
-  // 振替休日: 祝日が日曜の場合、翌月曜が振替休日
-  if(dw===1){var prev=getJPHoliday(y,m,d-1);if(prev)return "振替休日"}
-  // 国民の休日: 前後が祝日の平日
-  if(dw!==0){var bef=getJPHoliday(y,m,d-1);var aft=getJPHoliday(y,m,d+1);if(bef&&aft&&bef!=="振替休日"&&aft!=="振替休日")return "国民の休日"}
-  // 特別休日
   if(y===2019&&m===4&&d===1)return "即位の日";
   if(y===2019&&m===9&&d===22)return "即位礼正殿の儀";
+  return null;
+}
+function getJPHoliday(y,m,d){
+  var base=_jpBase(y,m,d);
+  if(base)return base;
+  var dt=new Date(y,m,d),dw=dt.getDay();
+  if(dw===1){var pd=new Date(y,m,d-1);if(_jpBase(pd.getFullYear(),pd.getMonth(),pd.getDate()))return "振替休日"}
+  if(dw!==0){var p2=new Date(y,m,d-1);var n2=new Date(y,m,d+1);var bef=_jpBase(p2.getFullYear(),p2.getMonth(),p2.getDate());var aft=_jpBase(n2.getFullYear(),n2.getMonth(),n2.getDate());if(bef&&aft)return "国民の休日"}
   return null;
 }
 var _pencilSeen=false;
