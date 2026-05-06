@@ -558,7 +558,14 @@ function autoPalm(e){
 }
 
 /* ============================
-   Undo / Redo (PNG data URL)
+   Undo / Redo (synchronous canvas snapshots)
+   ----------------------------
+   Each entry is a fully-rendered offscreen <canvas> the same size as the
+   live drawing canvas. Snapshots are produced by canvas-to-canvas
+   drawImage and applied the same way, so there are NO async PNG decodes
+   that could fail or race against user input. This is critical: the
+   previous async approach could drop the saved drawing if the new Image()
+   used for restore failed silently.
    ============================ */
 var UNDO_MAX=15;
 var undoList=[];
@@ -569,17 +576,39 @@ function getActiveCanvas(){
   return curCv;
 }
 
+function _isCanvasEmpty(cv){
+  try{
+    var d=cv.ctx.getImageData(0,0,cv.canvas.width,cv.canvas.height).data;
+    for(var i=3;i<d.length;i+=4){if(d[i]>0)return false}
+    return true;
+  }catch(e){return false}
+}
+
+function _snapshot(cv){
+  var snap=document.createElement("canvas");
+  snap.width=cv.canvas.width;
+  snap.height=cv.canvas.height;
+  var sCtx=snap.getContext("2d");
+  sCtx.drawImage(cv.canvas,0,0);
+  return snap;
+}
+
 function pushUndo(){
   var cv=getActiveCanvas();
   if(!cv)return;
-  /* Don't capture an empty state before the saved drawing has loaded —
-     otherwise undo can wipe the day's existing handwriting. */
+  /* Wait until the day's saved drawing has been drawn — otherwise the
+     captured snapshot would be empty and Undo could wipe the day. */
   if(cv.imgReady===false)return;
+  /* Defense in depth: if the canvas is empty AND we've previously seen
+     content, refuse to record this state so Undo can never erase the
+     existing handwriting. */
+  if(cv._everHadContent&&_isCanvasEmpty(cv))return;
   try{
-    var url=cv.canvas.toDataURL("image/png");
-    undoList.push(url);
+    var snap=_snapshot(cv);
+    undoList.push(snap);
     if(undoList.length>UNDO_MAX)undoList.shift();
     redoList=[];
+    if(!_isCanvasEmpty(cv))cv._everHadContent=true;
     updateUrBtns();
   }catch(e){}
 }
@@ -587,35 +616,35 @@ function pushUndo(){
 function doUndo(){
   var cv=getActiveCanvas();
   if(!cv||undoList.length===0)return;
-  var curUrl=cv.canvas.toDataURL("image/png");
-  redoList.push(curUrl);
+  var current=_snapshot(cv);
+  redoList.push(current);
   var prev=undoList.pop();
-  restoreCanvas(cv,prev);
+  _applySnapshot(cv,prev);
   updateUrBtns();
+  triggerSave();
 }
 
 function doRedo(){
   var cv=getActiveCanvas();
   if(!cv||redoList.length===0)return;
-  var curUrl=cv.canvas.toDataURL("image/png");
-  undoList.push(curUrl);
+  var current=_snapshot(cv);
+  undoList.push(current);
   var nxt=redoList.pop();
-  restoreCanvas(cv,nxt);
+  _applySnapshot(cv,nxt);
   updateUrBtns();
+  triggerSave();
 }
 
-function restoreCanvas(cv,dataUrl){
-  var img=new Image();
-  img.onload=function(){
-    cv.ctx.save();
-    cv.ctx.setTransform(cv.dpr,0,0,cv.dpr,0,0);
-    cv.ctx.clearRect(0,0,cv.w,cv.h);
-    cv.ctx.drawImage(img,0,0,cv.w,cv.h);
-    cv.ctx.restore();
-    triggerSave();
-  };
-  img.src=dataUrl;
+function _applySnapshot(cv,snap){
+  cv.ctx.save();
+  /* Use raw pixel coords so the snapshot blits 1:1 onto the backing buffer */
+  cv.ctx.setTransform(1,0,0,1,0,0);
+  cv.ctx.globalCompositeOperation="copy"; /* replace pixels exactly */
+  cv.ctx.globalAlpha=1;
+  cv.ctx.drawImage(snap,0,0);
+  cv.ctx.restore();
 }
+
 
 function updateUrBtns(){
   var uBtns=document.querySelectorAll(".ur-undo");
@@ -1194,49 +1223,49 @@ function tkAddScrubPt(sx,sy){
   }
   return rev>=3;
 }
+function _tkSnapshot(tkc){
+  var snap=document.createElement("canvas");
+  snap.width=tkc.canvas.width;
+  snap.height=tkc.canvas.height;
+  snap.getContext("2d").drawImage(tkc.canvas,0,0);
+  return snap;
+}
+function _tkApply(tkc,snap){
+  tkc.ctx.save();
+  tkc.ctx.setTransform(1,0,0,1,0,0);
+  tkc.ctx.globalCompositeOperation="copy";
+  tkc.ctx.globalAlpha=1;
+  tkc.ctx.drawImage(snap,0,0);
+  tkc.ctx.restore();
+}
 function tkPushUndo(tkc){
   if(!tkc)return;
   if(!tkc.undoList)tkc.undoList=[];
   if(!tkc.redoList)tkc.redoList=[];
   try{
-    var url=tkc.canvas.toDataURL("image/png");
-    tkc.undoList.push(url);
+    tkc.undoList.push(_tkSnapshot(tkc));
     if(tkc.undoList.length>UNDO_MAX)tkc.undoList.shift();
     tkc.redoList=[];
     tkUpdateUrBtns();
   }catch(e){}
 }
-function tkRestoreCanvas(tkc,dataUrl){
-  var img=new Image();
-  img.onload=function(){
-    tkc.ctx.save();
-    tkc.ctx.setTransform(tkc.dpr,0,0,tkc.dpr,0,0);
-    tkc.ctx.clearRect(0,0,tkc.w,tkc.h);
-    tkc.ctx.drawImage(img,0,0,tkc.w,tkc.h);
-    tkc.ctx.restore();
-    triggerSave();
-  };
-  img.src=dataUrl;
-}
 function tkDoUndo(){
   var tkc=_activeTkCv;
   if(!tkc||!tkc.undoList||tkc.undoList.length===0)return;
-  var curUrl=tkc.canvas.toDataURL("image/png");
   if(!tkc.redoList)tkc.redoList=[];
-  tkc.redoList.push(curUrl);
-  var prev=tkc.undoList.pop();
-  tkRestoreCanvas(tkc,prev);
+  tkc.redoList.push(_tkSnapshot(tkc));
+  _tkApply(tkc,tkc.undoList.pop());
   tkUpdateUrBtns();
+  triggerSave();
 }
 function tkDoRedo(){
   var tkc=_activeTkCv;
   if(!tkc||!tkc.redoList||tkc.redoList.length===0)return;
-  var curUrl=tkc.canvas.toDataURL("image/png");
   if(!tkc.undoList)tkc.undoList=[];
-  tkc.undoList.push(curUrl);
-  var nxt=tkc.redoList.pop();
-  tkRestoreCanvas(tkc,nxt);
+  tkc.undoList.push(_tkSnapshot(tkc));
+  _tkApply(tkc,tkc.redoList.pop());
   tkUpdateUrBtns();
+  triggerSave();
 }
 function tkUpdateUrBtns(){
   var u=document.getElementById("btn-tk-undo");
@@ -1404,8 +1433,8 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
 
   var ctx=cv.getContext("2d",{desynchronized:true})||cv.getContext("2d");
   var rect=box.getBoundingClientRect();
-  /* Boost backing-buffer DPR so pinch-in stays sharp up to ~2x zoom */
-  var dpr=Math.min((window.devicePixelRatio||2)*2,4);
+  /* Standard device DPR — keeps memory bounded for reliable undo/redo */
+  var dpr=window.devicePixelRatio||2;
   var w=rect.width,h=hPx||rect.height;
 
   cv.style.width=w+"px";
@@ -1427,7 +1456,11 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
 
   if(existingImg){
     var img=new Image();
-    img.onload=function(){ctx.drawImage(img,0,0,w,h);info.imgReady=true};
+    img.onload=function(){
+      ctx.drawImage(img,0,0,w,h);
+      info.imgReady=true;
+      info._everHadContent=true; /* lock against pushUndo capturing an empty state */
+    };
     img.onerror=function(){info.imgReady=true};
     img.src=existingImg;
   }
@@ -1610,8 +1643,8 @@ function openFull(){
     var body=document.getElementById("cvf-body");
     var fcv=document.getElementById("cvf-cv");
     var rect=body.getBoundingClientRect();
-    /* Higher backing-buffer DPR keeps pinch-in sharp on the fullscreen canvas too */
-    var dpr=Math.min((window.devicePixelRatio||2)*2,4);
+    /* Standard device DPR — keeps memory bounded for reliable undo/redo */
+    var dpr=window.devicePixelRatio||2;
     var w=rect.width,h=rect.height;
 
     fcv.style.width=w+"px";fcv.style.height=h+"px";
