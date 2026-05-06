@@ -72,8 +72,9 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc)}
 .dw{padding:16px 20px;max-width:1200px;margin:0 auto}
 .day-cols{display:flex;gap:16px;align-items:flex-start}
+.day-training{width:300px;flex-shrink:0}
 .day-main{flex:1;min-width:0}
-.day-task{width:320px;flex-shrink:0}
+.day-task{width:300px;flex-shrink:0}
 .tk-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);overflow:hidden}
 .tk-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .tk-hdr>span{font-size:15px;font-weight:700;color:var(--acc)}
@@ -91,7 +92,28 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tk-cv{display:block;width:100%;height:100%;background:transparent}
 .tk-add{width:100%;padding:10px;border:none;background:transparent;font-size:13px;color:var(--sub);cursor:pointer;text-align:center}
 .tk-add:active{background:var(--acc-lt)}
-@media(max-width:767px){.day-cols{flex-direction:column}.day-task{width:100%}}
+/* Training panel — mirrors task panel styling but with category groupings */
+.tr-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);overflow:hidden}
+.tr-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tr-hdr>span{font-size:15px;font-weight:700;color:var(--acc)}
+.tr-hdr .tr-tools{display:flex;gap:6px;align-items:center}
+.tr-hdr .tr-tools .ur{padding:4px 10px;font-size:13px;min-width:32px;font-weight:700}
+.tr-body{position:relative;padding:0}
+.tr-cat{border-bottom:1px solid var(--bdr)}
+.tr-cat:last-child{border-bottom:none}
+.tr-cat-h{padding:10px 14px 6px;font-size:13px;font-weight:700;color:var(--text);background:var(--acc-lt);display:flex;align-items:center;gap:8px}
+.tr-cat-h .tr-chk{padding-top:0;width:28px}
+.tr-row{display:flex;align-items:flex-start;border-top:1px solid rgba(0,0,0,.04)}
+.tr-row:first-child{border-top:none}
+.tr-chk{width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding-top:11px;cursor:pointer}
+.tr-chk svg{width:20px;height:20px}
+.tr-chk rect{stroke:var(--bdr);stroke-width:1.5;fill:transparent;rx:3}
+.tr-chk.done rect{stroke:var(--acc);fill:var(--acc-lt)}
+.tr-chk.done path{stroke:var(--acc);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tr-lbl{width:54px;flex-shrink:0;padding:14px 4px 0 4px;font-size:12px;color:var(--sub);font-weight:600}
+.tr-cv-wrap{flex:1;min-width:0;height:44px;position:relative;overflow:hidden}
+.tr-cv{display:block;width:100%;height:100%;background:transparent}
+@media(max-width:767px){.day-cols{flex-direction:column}.day-task,.day-training{width:100%}}
 .dn{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .dnb{padding:10px 18px;border:1px solid var(--bdr);border-radius:8px;background:var(--card);font-size:14px}
 .dh{display:flex;align-items:baseline;gap:12px;margin-bottom:20px}
@@ -1086,19 +1108,76 @@ function renderDay(){
       h+='</div>';
 
       h+='<div class="day-cols">';
-      h+='<div class="day-main">';
 
+      /* === LEFT COLUMN: Training === */
+      var tr=entry.training||{};
+      function _trChk(id){return tr[id]&&tr[id].done?" done":""}
+      function _trChkSvg(id){return '<svg viewBox="0 0 22 22"><rect x="1" y="1" width="20" height="20"/>'+(tr[id]&&tr[id].done?'<path d="M6 11 L10 15 L16 7"/>':'')+'</svg>'}
+      h+='<div class="day-training">';
+      h+='<div class="tr-panel">';
+      h+='<div class="tr-hdr"><span>&#128170; トレーニング</span>';
+      h+='<span class="tr-tools">';
+      h+='<button class="ur tap off" id="btn-tr-undo" title="元に戻す">&#8592;</button>';
+      h+='<button class="ur tap off" id="btn-tr-redo" title="やり直し">&#8594;</button>';
+      h+='</span></div>';
+      h+='<div class="tr-body">';
+      h+='<div class="scrub-ind" id="scr-tr">消しゴムモード</div>';
+      /* 筋トレ — five body parts, each with its own checkbox */
+      h+='<div class="tr-cat">';
+      h+='<div class="tr-cat-h">筋トレ</div>';
+      var bodyParts=[["muscle_legs","脚"],["muscle_chest","胸"],["muscle_shoulder","肩"],["muscle_back","背中"],["muscle_arms","腕"]];
+      for(var bi=0;bi<bodyParts.length;bi++){
+        var bid=bodyParts[bi][0],blbl=bodyParts[bi][1];
+        h+='<div class="tr-row" data-id="'+bid+'">';
+        h+='<div class="tr-chk'+_trChk(bid)+'" data-id="'+bid+'">'+_trChkSvg(bid)+'</div>';
+        h+='<div class="tr-lbl">'+blbl+'</div>';
+        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas></div>';
+        h+='</div>';
+      }
+      h+='</div>';
+      /* ランニング — parent checkbox + distance/time/pace fields */
+      h+='<div class="tr-cat">';
+      h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("running")+'" data-id="running">'+_trChkSvg("running")+'</div>ランニング</div>';
+      var runFields=[["running_distance","距離"],["running_time","時間"],["running_pace","ペース"]];
+      for(var ri=0;ri<runFields.length;ri++){
+        var rid=runFields[ri][0],rlbl=runFields[ri][1];
+        h+='<div class="tr-row" data-id="'+rid+'">';
+        h+='<div class="tr-chk" style="visibility:hidden"></div>';
+        h+='<div class="tr-lbl">'+rlbl+'</div>';
+        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
+        h+='</div>';
+      }
+      h+='</div>';
+      /* クロスフィット — parent checkbox + menu field */
+      h+='<div class="tr-cat">';
+      h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("crossfit")+'" data-id="crossfit">'+_trChkSvg("crossfit")+'</div>クロスフィット</div>';
+      h+='<div class="tr-row" data-id="crossfit_menu">';
+      h+='<div class="tr-chk" style="visibility:hidden"></div>';
+      h+='<div class="tr-lbl">メニュー</div>';
+      h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas></div>';
+      h+='</div>';
+      h+='</div>';
+      /* その他 — parent checkbox + free content field */
+      h+='<div class="tr-cat">';
+      h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("other")+'" data-id="other">'+_trChkSvg("other")+'</div>その他</div>';
+      h+='<div class="tr-row" data-id="other_content">';
+      h+='<div class="tr-chk" style="visibility:hidden"></div>';
+      h+='<div class="tr-cv-wrap" style="margin-left:0"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas></div>';
+      h+='</div>';
+      h+='</div>';
+      h+='</div></div></div>';
+
+      /* === MIDDLE COLUMN: Handwriting (centered) === */
+      h+='<div class="day-main">';
       h+='<div class="ec"><div class="ec-h">';
       h+='<span class="ec-y cu">'+yr+'年</span>';
       h+='<div class="sg"><label>&#128716; 睡眠</label>';
       h+='<input type="number" class="slp" id="slp" value="'+(entry.sleep||"")+'" min="0" max="24" step="0.5" placeholder="h">';
       h+='<label>時間</label></div></div>';
-
       h+='<div class="ec-b">';
-      h+='<textarea class="ta" id="txt" placeholder="今日はどんな一日でしたか？">'+(entry.text||"")+'</textarea>';
       h+='<div class="cvs">';
       h+='<div class="cvb" id="tb-inl">'+buildToolbar()+'</div>';
-      h+='<div class="cv-box" id="cvbox" style="height:420px">';
+      h+='<div class="cv-box" id="cvbox" style="height:480px">';
       h+='<canvas class="dcv" id="dcv"></canvas>';
       h+='<div class="erc" id="erc-i"></div>';
       h+='<div class="scrub-ind" id="scr-i">消しゴムモード</div>';
@@ -1106,9 +1185,9 @@ function renderDay(){
       h+='<button class="zr tap" id="zr-i">リセット</button>';
       h+='<button class="cv-exp tap" id="btn-exp2" title="全画面">&#x26F6;</button>';
       h+='</div></div></div></div>';
-
       h+='</div>';
 
+      /* === RIGHT COLUMN: Tasks === */
       var tasks=entry.tasks||[];
       h+='<div class="day-task">';
       h+='<div class="tk-panel">';
@@ -1164,9 +1243,7 @@ function bindDayEvents(existingImg){
   onTap(document.getElementById("btn-pd"),function(){navDay(-1)});
   onTap(document.getElementById("btn-nd"),function(){navDay(1)});
 
-  var txt=document.getElementById("txt");
   var slp=document.getElementById("slp");
-  if(txt){txt.addEventListener("input",triggerSave);txt.addEventListener("blur",triggerSave)}
   if(slp){slp.addEventListener("input",triggerSave);slp.addEventListener("change",triggerSave)}
 
   bindToolbar(document.getElementById("tb-inl"),function(){
@@ -1195,6 +1272,8 @@ function bindDayEvents(existingImg){
   }else{
     _setupCanvas(null);
   }
+  /* Initialize training panel canvases (small, no preload race) */
+  setTimeout(function(){initTrainingPanel()},80);
 }
 
 /* Task panel logic */
@@ -1421,6 +1500,206 @@ function toggleTaskCheck(el){
     el.querySelector("svg").innerHTML='<rect x="1" y="1" width="20" height="20"/><path d="M6 11 L10 15 L16 7"/>';
   }
   triggerSave();
+}
+
+/* ============================
+   Training panel logic — parallel to task panel,
+   keyed by training-row id (e.g. "muscle_legs")
+   ============================ */
+var _trCanvases=[];
+var _activeTrCv=null;
+var _trScrubMoves=[];
+var _trScrubActive=false;
+function trResetScrub(){_trScrubMoves=[];_trScrubActive=false;var ind=document.getElementById("scr-tr");if(ind)ind.classList.remove("show")}
+function trAddScrubPt(sx,sy){
+  var t=Date.now();
+  _trScrubMoves.push({x:sx,y:sy,t:t});
+  while(_trScrubMoves.length>0&&t-_trScrubMoves[0].t>800)_trScrubMoves.shift();
+  if(_trScrubMoves.length<10)return false;
+  var n=_trScrubMoves.length,step=Math.max(1,Math.floor(n/8)),pts=[];
+  for(var i=0;i<n;i+=step)pts.push(_trScrubMoves[i]);
+  if(pts.length<3)return false;
+  var rev=0;
+  for(var j=2;j<pts.length;j++){
+    var dx1=pts[j-1].x-pts[j-2].x,dx2=pts[j].x-pts[j-1].x;
+    var dy1=pts[j-1].y-pts[j-2].y,dy2=pts[j].y-pts[j-1].y;
+    if((dx1>3&&dx2<-3)||(dx1<-3&&dx2>3))rev++;
+    if((dy1>3&&dy2<-3)||(dy1<-3&&dy2>3))rev++;
+  }
+  return rev>=3;
+}
+function _trSnapshot(trc){
+  var snap=document.createElement("canvas");
+  snap.width=trc.canvas.width;snap.height=trc.canvas.height;
+  snap.getContext("2d").drawImage(trc.canvas,0,0);
+  return snap;
+}
+function _trApply(trc,snap){
+  trc.ctx.save();
+  trc.ctx.setTransform(1,0,0,1,0,0);
+  trc.ctx.globalCompositeOperation="copy";
+  trc.ctx.globalAlpha=1;
+  trc.ctx.drawImage(snap,0,0);
+  trc.ctx.restore();
+}
+function trPushUndo(trc){
+  if(!trc)return;
+  if(!trc.undoList)trc.undoList=[];
+  if(!trc.redoList)trc.redoList=[];
+  try{
+    trc.undoList.push(_trSnapshot(trc));
+    if(trc.undoList.length>UNDO_MAX)trc.undoList.shift();
+    trc.redoList=[];
+    trUpdateUrBtns();
+  }catch(e){}
+}
+function trDoUndo(){
+  var trc=_activeTrCv;
+  if(!trc||!trc.undoList||trc.undoList.length===0)return;
+  if(!trc.redoList)trc.redoList=[];
+  trc.redoList.push(_trSnapshot(trc));
+  _trApply(trc,trc.undoList.pop());
+  trUpdateUrBtns();
+  triggerSave();
+}
+function trDoRedo(){
+  var trc=_activeTrCv;
+  if(!trc||!trc.redoList||trc.redoList.length===0)return;
+  if(!trc.undoList)trc.undoList=[];
+  trc.undoList.push(_trSnapshot(trc));
+  _trApply(trc,trc.redoList.pop());
+  trUpdateUrBtns();
+  triggerSave();
+}
+function trUpdateUrBtns(){
+  var u=document.getElementById("btn-tr-undo");
+  var r=document.getElementById("btn-tr-redo");
+  var trc=_activeTrCv;
+  if(u){if(!trc||!trc.undoList||trc.undoList.length===0)u.classList.add("off");else u.classList.remove("off")}
+  if(r){if(!trc||!trc.redoList||trc.redoList.length===0)r.classList.add("off");else r.classList.remove("off")}
+}
+function initTrainingPanel(){
+  _trCanvases=[];_activeTrCv=null;trResetScrub();
+  var rows=document.querySelectorAll(".tr-cv");
+  for(var i=0;i<rows.length;i++)initTrainingRow(rows[i]);
+  var uBtn=document.getElementById("btn-tr-undo");
+  var rBtn=document.getElementById("btn-tr-redo");
+  if(uBtn)onTap(uBtn,function(){trDoUndo()});
+  if(rBtn)onTap(rBtn,function(){trDoRedo()});
+  /* Bind training checkboxes (those with data-id) */
+  var chks=document.querySelectorAll(".tr-chk[data-id]");
+  for(var j=0;j<chks.length;j++){
+    (function(el){
+      el.addEventListener("click",function(){toggleTrCheck(el)});
+      el.addEventListener("touchend",function(e){e.preventDefault();toggleTrCheck(el)});
+    })(chks[j]);
+  }
+  trUpdateUrBtns();
+}
+function toggleTrCheck(el){
+  var wasDone=el.classList.contains("done");
+  if(wasDone){
+    el.classList.remove("done");
+    el.querySelector("svg").innerHTML='<rect x="1" y="1" width="20" height="20"/>';
+  }else{
+    el.classList.add("done");
+    el.querySelector("svg").innerHTML='<rect x="1" y="1" width="20" height="20"/><path d="M6 11 L10 15 L16 7"/>';
+  }
+  triggerSave();
+}
+function initTrainingRow(cv){
+  if(!cv)return;
+  var wrap=cv.parentElement;
+  var dpr=window.devicePixelRatio||2;
+  var w=wrap.offsetWidth||180,h=wrap.offsetHeight||44;
+  cv.width=w*dpr;cv.height=h*dpr;
+  cv.style.width=w+"px";cv.style.height=h+"px";
+  var ctx=cv.getContext("2d");ctx.scale(dpr,dpr);
+  ctx.lineWidth=1.5;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#1a1a1a";
+  var id=cv.getAttribute("data-id")||"";
+  var trc={canvas:cv,ctx:ctx,w:w,h:h,dpr:dpr,id:id,undoList:[],redoList:[]};
+  var ds=fmt(sel);
+  dbGet(ds).then(function(entry){
+    if(entry&&entry.training&&entry.training[id]&&entry.training[id].drawing){
+      var img=new Image();
+      img.onload=function(){
+        ctx.save();
+        ctx.setTransform(1,0,0,1,0,0);
+        if(img.naturalWidth===cv.width&&img.naturalHeight===cv.height){
+          ctx.imageSmoothingEnabled=false;
+          ctx.drawImage(img,0,0);
+        }else{
+          ctx.imageSmoothingEnabled=true;
+          try{ctx.imageSmoothingQuality="high"}catch(e){}
+          ctx.drawImage(img,0,0,cv.width,cv.height);
+        }
+        ctx.restore();
+      };
+      img.src=entry.training[id].drawing;
+    }
+  });
+  var drawing=false,lx=0,ly=0,strokeStarted=false,scrubFlag=false;
+  function pos(e){var r=cv.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top}}
+  function drawSeg(x1,y1,x2,y2,erasing){
+    if(erasing){
+      ctx.save();
+      ctx.globalCompositeOperation="destination-out";
+      ctx.lineWidth=14;ctx.strokeStyle="rgba(0,0,0,1)";ctx.globalAlpha=1;
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+      ctx.restore();
+    }else{
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    }
+  }
+  cv.addEventListener("touchstart",function(e){
+    if(palmReject&&!isStylus(e.touches[0]))return;
+    e.preventDefault();
+    drawing=true;strokeStarted=false;scrubFlag=false;trResetScrub();
+    _activeTrCv=trc;trUpdateUrBtns();
+    var p=pos(e);lx=p.x;ly=p.y;
+  },{passive:false});
+  cv.addEventListener("touchmove",function(e){
+    if(!drawing)return;e.preventDefault();
+    if(!strokeStarted){trPushUndo(trc);strokeStarted=true}
+    var t=e.touches[0];
+    var isScrub=trAddScrubPt(t.clientX,t.clientY);
+    if(isScrub&&!_trScrubActive){
+      _trScrubActive=true;
+      var ind=document.getElementById("scr-tr");if(ind)ind.classList.add("show");
+    }
+    if(_trScrubActive)scrubFlag=true;
+    var p=pos(e);
+    drawSeg(lx,ly,p.x,p.y,scrubFlag);
+    lx=p.x;ly=p.y;
+  },{passive:false});
+  cv.addEventListener("touchend",function(){
+    if(drawing){drawing=false;triggerSave();trResetScrub()}
+  });
+  cv.addEventListener("touchcancel",function(){drawing=false;trResetScrub()});
+  cv.addEventListener("mousedown",function(e){
+    drawing=true;strokeStarted=false;scrubFlag=false;trResetScrub();
+    _activeTrCv=trc;trUpdateUrBtns();
+    lx=e.offsetX;ly=e.offsetY;
+  });
+  cv.addEventListener("mousemove",function(e){
+    if(!drawing)return;
+    if(!strokeStarted){trPushUndo(trc);strokeStarted=true}
+    var isScrub=trAddScrubPt(e.clientX,e.clientY);
+    if(isScrub&&!_trScrubActive){
+      _trScrubActive=true;
+      var ind=document.getElementById("scr-tr");if(ind)ind.classList.add("show");
+    }
+    if(_trScrubActive)scrubFlag=true;
+    drawSeg(lx,ly,e.offsetX,e.offsetY,scrubFlag);
+    lx=e.offsetX;ly=e.offsetY;
+  });
+  cv.addEventListener("mouseup",function(){
+    if(drawing){drawing=false;triggerSave();trResetScrub()}
+  });
+  cv.addEventListener("mouseleave",function(){
+    if(drawing){drawing=false;triggerSave();trResetScrub()}
+  });
+  _trCanvases.push(trc);
 }
 
 function navDay(d){
@@ -1856,9 +2135,7 @@ function triggerSave(){
   if(svTm)clearTimeout(svTm);
   svTm=setTimeout(function(){
     var ds=fmt(sel);
-    var ta=document.getElementById("txt");
     var slp=document.getElementById("slp");
-    var text=ta?ta.value:"";
     var sleep=slp?parseFloat(slp.value)||null:null;
     var drawData=null;
 
@@ -1890,12 +2167,41 @@ function triggerSave(){
       }
     }
 
-    if(!text&&!drawData&&!sleep&&taskData.length===0)return;
+    /* Training data: collect drawings + checkbox state by id */
+    var trainingData={};
+    var trCanvases=document.querySelectorAll(".tr-cv");
+    for(var trI=0;trI<trCanvases.length;trI++){
+      var trCv=trCanvases[trI];
+      var trId=trCv.getAttribute("data-id");
+      if(!trId)continue;
+      var trDraw=null;
+      try{
+        var trCtx=trCv.getContext("2d");
+        var trIdData=trCtx.getImageData(0,0,trCv.width,trCv.height);
+        var trHas=false;
+        for(var trPx=3;trPx<trIdData.data.length;trPx+=4){if(trIdData.data[trPx]>0){trHas=true;break}}
+        if(trHas)trDraw=trCv.toDataURL("image/png");
+      }catch(trE){}
+      if(trDraw)trainingData[trId]=trainingData[trId]||{},trainingData[trId].drawing=trDraw;
+    }
+    var trChkBoxes=document.querySelectorAll(".tr-chk[data-id]");
+    for(var trC=0;trC<trChkBoxes.length;trC++){
+      var trChk=trChkBoxes[trC];
+      var trCid=trChk.getAttribute("data-id");
+      if(trChk.classList.contains("done")){
+        trainingData[trCid]=trainingData[trCid]||{};
+        trainingData[trCid].done=true;
+      }
+    }
+    var trKeys=[];for(var k in trainingData)trKeys.push(k);
+
+    if(!drawData&&!sleep&&taskData.length===0&&trKeys.length===0)return;
 
     var entry={
       id:ds,date:ds,monthDay:gmd(sel),yearMonth:ds.substring(0,7),
-      text:text,drawing:drawData,sleep:sleep,
+      drawing:drawData,sleep:sleep,
       tasks:taskData.length>0?taskData:null,
+      training:trKeys.length>0?trainingData:null,
       updatedAt:new Date().toISOString(),
       _v:DATA_VERSION
     };
