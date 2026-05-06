@@ -99,20 +99,19 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-hdr .tr-tools{display:flex;gap:6px;align-items:center}
 .tr-hdr .tr-tools .ur{padding:4px 10px;font-size:13px;min-width:32px;font-weight:700}
 .tr-body{position:relative;padding:0}
-.tr-cat{border-bottom:1px solid var(--bdr)}
+.tr-cat{border-bottom:1px solid var(--bdr);padding-bottom:6px}
 .tr-cat:last-child{border-bottom:none}
-.tr-cat-h{padding:10px 14px 6px;font-size:13px;font-weight:700;color:var(--text);background:var(--acc-lt);display:flex;align-items:center;gap:8px}
+.tr-cat-h{padding:10px 14px 8px;font-size:13px;font-weight:700;color:var(--text);background:var(--acc-lt);display:flex;align-items:center;gap:8px}
 .tr-cat-h .tr-chk{padding-top:0;width:28px}
-.tr-row{display:flex;align-items:flex-start;border-top:1px solid rgba(0,0,0,.04)}
-.tr-row:first-child{border-top:none}
-.tr-chk{width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding-top:11px;cursor:pointer}
+.tr-row{display:flex;align-items:center;padding:6px 8px}
+.tr-chk{width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .tr-chk svg{width:20px;height:20px}
 .tr-chk rect{stroke:var(--bdr);stroke-width:1.5;fill:transparent;rx:3}
 .tr-chk.done rect{stroke:var(--acc);fill:var(--acc-lt)}
 .tr-chk.done path{stroke:var(--acc);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.tr-lbl{width:54px;flex-shrink:0;padding:14px 4px 0 4px;font-size:12px;color:var(--sub);font-weight:600}
-.tr-cv-wrap{flex:1;min-width:0;height:44px;position:relative;overflow:hidden}
-.tr-cv{display:block;width:100%;height:100%;background:transparent}
+.tr-lbl{width:54px;flex-shrink:0;padding:0 4px;font-size:12px;color:var(--sub);font-weight:600}
+.tr-cv-wrap{flex:1;min-width:0;height:64px;position:relative;overflow:hidden;border:1px solid var(--bdr);border-radius:6px;background:#fdfaf6;background-image:repeating-linear-gradient(to bottom,transparent,transparent 28px,rgba(190,170,145,.18) 28px,rgba(190,170,145,.18) 29px);background-position:0 4px}
+.tr-cv{display:block;width:100%;height:100%;background:transparent;touch-action:none}
 @media(max-width:767px){.day-cols{flex-direction:column}.day-task,.day-training{width:100%}}
 .dn{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .dnb{padding:10px 18px;border:1px solid var(--bdr);border-radius:8px;background:var(--card);font-size:14px}
@@ -188,6 +187,19 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .ptx{font-size:14px;line-height:1.8;white-space:pre-wrap;color:var(--text)}
 .pi{width:100%;border-radius:8px;margin-top:8px}
 .ne{color:#ccc;font-size:14px;font-style:italic}
+/* Past-entry tasks/training sub-sections */
+.pt-sec{margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr)}
+.pt-sec-h{font-size:13px;font-weight:700;color:var(--acc);margin-bottom:8px}
+.pt-row{display:flex;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap}
+.pt-row-sub{padding-left:24px}
+.pt-chk{display:inline-block;width:16px;height:16px;border:1.5px solid var(--bdr);border-radius:3px;flex-shrink:0;background:transparent;position:relative}
+.pt-chk.done{border-color:var(--acc);background:var(--acc-lt)}
+.pt-chk.done::after{content:"";position:absolute;left:3px;top:0px;width:5px;height:9px;border:solid var(--acc);border-width:0 2px 2px 0;-webkit-transform:rotate(45deg);transform:rotate(45deg)}
+.pt-tr-cat-h{font-size:12px;font-weight:700;color:var(--text);margin-top:8px;margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.pt-tr-lbl{font-size:12px;color:var(--sub);font-weight:600;min-width:42px}
+.pt-img{max-width:100%;max-height:64px;border:1px solid var(--bdr);border-radius:4px;background:#fdfaf6}
+.ec-y.tap{cursor:pointer;-webkit-transition:color .15s;transition:color .15s}
+.ec-y.tap:active{color:var(--text);text-decoration:underline}
 .sw{padding:20px;max-width:800px;margin:0 auto}
 .sc{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);padding:20px;margin-bottom:12px}
 .sc h3{font-size:13px;color:var(--sub);font-weight:500;margin-bottom:8px}
@@ -1221,12 +1233,86 @@ function renderDay(){
         h+='<div class="pt">&#128214; 過去の '+(sel.getMonth()+1)+'月'+sel.getDate()+'日</div>';
         for(i=0;i<past.length;i++){
           var p=past[i],pY=p.date.split("-")[0];
-          h+='<div class="ec"><div class="ec-h"><span class="ec-y">'+pY+'年</span>';
+          h+='<div class="ec"><div class="ec-h"><span class="ec-y tap" data-pd="'+p.date+'" title="この日の日記を開く">'+pY+'年</span>';
           if(p.sleep)h+='<span class="ec-s">&#128716; '+p.sleep+'h</span>';
           h+='</div><div class="ec-b">';
           if(p.text)h+='<div class="ptx">'+esc(p.text)+'</div>';
           if(p.drawing)h+='<img class="pi" src="'+p.drawing+'" alt="'+pY+'年の手書き">';
-          if(!p.text&&!p.drawing)h+='<div class="ne">（内容なし）</div>';
+
+          /* Past tasks */
+          if(p.tasks&&p.tasks.length>0){
+            h+='<div class="pt-sec"><div class="pt-sec-h">&#9745; タスク</div>';
+            for(var pti=0;pti<p.tasks.length;pti++){
+              var pt=p.tasks[pti];
+              if(!pt.drawing&&!pt.done)continue;
+              h+='<div class="pt-row">';
+              h+='<span class="pt-chk'+(pt.done?" done":"")+'"></span>';
+              if(pt.drawing)h+='<img class="pt-img" src="'+pt.drawing+'" alt="">';
+              h+='</div>';
+            }
+            h+='</div>';
+          }
+
+          /* Past training */
+          if(p.training){
+            var tr2=p.training;
+            var hasTr=false;for(var trK in tr2){hasTr=true;break}
+            if(hasTr){
+              h+='<div class="pt-sec"><div class="pt-sec-h">&#128170; トレーニング</div>';
+              /* 筋トレ */
+              var muscleParts=[["muscle_legs","脚"],["muscle_chest","胸"],["muscle_shoulder","肩"],["muscle_back","背中"],["muscle_arms","腕"]];
+              var hasMuscle=false;
+              for(var mi=0;mi<muscleParts.length;mi++){
+                var mid=muscleParts[mi][0];
+                if(tr2[mid]&&(tr2[mid].drawing||tr2[mid].done)){hasMuscle=true;break}
+              }
+              if(hasMuscle){
+                h+='<div class="pt-tr-cat-h">筋トレ</div>';
+                for(var mi2=0;mi2<muscleParts.length;mi2++){
+                  var mid2=muscleParts[mi2][0],mlbl=muscleParts[mi2][1];
+                  var md=tr2[mid2];
+                  if(!md||(!md.drawing&&!md.done))continue;
+                  h+='<div class="pt-row">';
+                  h+='<span class="pt-chk'+(md.done?" done":"")+'"></span>';
+                  h+='<span class="pt-tr-lbl">'+mlbl+'</span>';
+                  if(md.drawing)h+='<img class="pt-img" src="'+md.drawing+'" alt="">';
+                  h+='</div>';
+                }
+              }
+              /* ランニング */
+              var runFs=[["running_distance","距離"],["running_time","時間"],["running_pace","ペース"]];
+              var hasRun=(tr2.running&&tr2.running.done);
+              for(var rfi=0;rfi<runFs.length;rfi++){if(tr2[runFs[rfi][0]]&&tr2[runFs[rfi][0]].drawing){hasRun=true;break}}
+              if(hasRun){
+                h+='<div class="pt-tr-cat-h"><span class="pt-chk'+(tr2.running&&tr2.running.done?" done":"")+'"></span>ランニング</div>';
+                for(var rfi2=0;rfi2<runFs.length;rfi2++){
+                  var rid=runFs[rfi2][0],rlbl=runFs[rfi2][1];
+                  if(!tr2[rid]||!tr2[rid].drawing)continue;
+                  h+='<div class="pt-row pt-row-sub">';
+                  h+='<span class="pt-tr-lbl">'+rlbl+'</span>';
+                  h+='<img class="pt-img" src="'+tr2[rid].drawing+'" alt="">';
+                  h+='</div>';
+                }
+              }
+              /* クロスフィット */
+              if((tr2.crossfit&&tr2.crossfit.done)||(tr2.crossfit_menu&&tr2.crossfit_menu.drawing)){
+                h+='<div class="pt-tr-cat-h"><span class="pt-chk'+(tr2.crossfit&&tr2.crossfit.done?" done":"")+'"></span>クロスフィット</div>';
+                if(tr2.crossfit_menu&&tr2.crossfit_menu.drawing){
+                  h+='<div class="pt-row pt-row-sub"><span class="pt-tr-lbl">メニュー</span><img class="pt-img" src="'+tr2.crossfit_menu.drawing+'" alt=""></div>';
+                }
+              }
+              /* その他 */
+              if((tr2.other&&tr2.other.done)||(tr2.other_content&&tr2.other_content.drawing)){
+                h+='<div class="pt-tr-cat-h"><span class="pt-chk'+(tr2.other&&tr2.other.done?" done":"")+'"></span>その他</div>';
+                if(tr2.other_content&&tr2.other_content.drawing){
+                  h+='<div class="pt-row pt-row-sub"><img class="pt-img" src="'+tr2.other_content.drawing+'" alt=""></div>';
+                }
+              }
+              h+='</div>';
+            }
+          }
+
+          if(!p.text&&!p.drawing&&!(p.tasks&&p.tasks.length>0)&&!p.training)h+='<div class="ne">（内容なし）</div>';
           h+='</div></div>';
         }
       }
@@ -1274,6 +1360,22 @@ function bindDayEvents(existingImg){
   }
   /* Initialize training panel canvases (small, no preload race) */
   setTimeout(function(){initTrainingPanel()},80);
+
+  /* Past-entry year tap navigation: jump to that day's diary */
+  var pYears=document.querySelectorAll(".ec-y[data-pd]");
+  for(var pyi=0;pyi<pYears.length;pyi++){
+    (function(el){
+      onTap(el,function(){
+        var d=el.getAttribute("data-pd");
+        if(!d)return;
+        var parts=d.split("-");
+        if(parts.length!==3)return;
+        sel=new Date(parseInt(parts[0],10),parseInt(parts[1],10)-1,parseInt(parts[2],10));
+        cY=sel.getFullYear();cM=sel.getMonth();
+        renderDay();
+      });
+    })(pYears[pyi]);
+  }
 }
 
 /* Task panel logic */
