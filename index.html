@@ -71,16 +71,16 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .cd.sl:not(.td){background:var(--acc-lt);font-weight:600}
 .dot{width:5px;height:5px;border-radius:50%;background:var(--acc)}
 .dw{padding:16px 20px;max-width:1200px;margin:0 auto}
-.day-cols{display:flex;gap:16px;align-items:flex-start}
-.day-training{width:300px;flex-shrink:0}
+.day-cols{display:flex;gap:16px;align-items:stretch}
+.day-training{width:300px;flex-shrink:0;display:flex}
 .day-main{flex:1;min-width:0}
-.day-task{width:300px;flex-shrink:0}
-.tk-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);overflow:hidden}
-.tk-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.day-task{width:300px;flex-shrink:0;display:flex}
+.tk-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);overflow:hidden;flex:1;display:flex;flex-direction:column;min-height:0}
+.tk-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0}
 .tk-hdr>span{font-size:15px;font-weight:700;color:var(--acc)}
 .tk-hdr .tk-tools{display:flex;gap:6px;align-items:center}
 .tk-hdr .tk-tools .ur{padding:4px 10px;font-size:13px;min-width:32px;font-weight:700}
-.tk-body{position:relative}
+.tk-body{position:relative;flex:1;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch}
 .tk-rows{padding:0}
 .tk-row{display:flex;align-items:flex-start;border-bottom:1px solid var(--bdr)}
 .tk-chk{width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding-top:10px;cursor:pointer}
@@ -93,12 +93,12 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tk-add{width:100%;padding:10px;border:none;background:transparent;font-size:13px;color:var(--sub);cursor:pointer;text-align:center}
 .tk-add:active{background:var(--acc-lt)}
 /* Training panel — mirrors task panel styling but with category groupings */
-.tr-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);overflow:hidden}
-.tr-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tr-panel{background:var(--card);border-radius:var(--r);border:1px solid var(--bdr);box-shadow:var(--shadow);overflow:hidden;flex:1;display:flex;flex-direction:column;min-height:0}
+.tr-hdr{padding:12px 16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0}
 .tr-hdr>span{font-size:15px;font-weight:700;color:var(--acc)}
 .tr-hdr .tr-tools{display:flex;gap:6px;align-items:center}
 .tr-hdr .tr-tools .ur{padding:4px 10px;font-size:13px;min-width:32px;font-weight:700}
-.tr-body{position:relative;padding:0}
+.tr-body{position:relative;padding:0;flex:1;overflow-y:auto;min-height:0;-webkit-overflow-scrolling:touch}
 .tr-cat{border-bottom:1px solid var(--bdr);padding-bottom:6px}
 .tr-cat:last-child{border-bottom:none}
 .tr-cat-h{padding:10px 14px 8px;font-size:13px;font-weight:700;color:var(--text);background:var(--acc-lt);display:flex;align-items:center;gap:8px}
@@ -111,6 +111,8 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-chk.done path{stroke:var(--acc);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .tr-lbl{width:54px;flex-shrink:0;padding:0 4px;font-size:12px;color:var(--sub);font-weight:600}
 .tr-cv-wrap{flex:1;min-width:0;height:64px;position:relative;overflow:hidden;border:1px solid var(--bdr);border-radius:6px;background:#fdfaf6;background-image:repeating-linear-gradient(to bottom,transparent,transparent 28px,rgba(190,170,145,.18) 28px,rgba(190,170,145,.18) 29px);background-position:0 4px}
+.tr-cv-wrap.thin{height:34px;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),rgba(190,170,145,.35) calc(100% - 1px))}
+.tr-row.thin{padding:3px 8px}
 .tr-cv{display:block;width:100%;height:100%;background:transparent;touch-action:none}
 @media(max-width:767px){.day-cols{flex-direction:column}.day-task,.day-training{width:100%}}
 .dn{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
@@ -185,7 +187,7 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .sstat{font-size:11px;color:var(--sub);text-align:right;padding:2px 20px 0}
 .pt{font-size:15px;font-weight:600;color:var(--sub);margin:24px 0 12px;padding-left:2px}
 .ptx{font-size:14px;line-height:1.8;white-space:pre-wrap;color:var(--text)}
-.pi{width:100%;border-radius:8px;margin-top:8px}
+.pi{display:block;max-width:100%;max-height:240px;width:auto;height:auto;border-radius:8px;margin-top:8px;background:#fdfaf6}
 .ne{color:#ccc;font-size:14px;font-style:italic}
 /* Past-entry tasks/training sub-sections */
 .pt-sec{margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr)}
@@ -1153,10 +1155,10 @@ function renderDay(){
       var runFields=[["running_distance","距離"],["running_time","時間"],["running_pace","ペース"]];
       for(var ri=0;ri<runFields.length;ri++){
         var rid=runFields[ri][0],rlbl=runFields[ri][1];
-        h+='<div class="tr-row" data-id="'+rid+'">';
+        h+='<div class="tr-row thin" data-id="'+rid+'">';
         h+='<div class="tr-chk" style="visibility:hidden"></div>';
         h+='<div class="tr-lbl">'+rlbl+'</div>';
-        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
+        h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
         h+='</div>';
       }
       h+='</div>';
