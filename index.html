@@ -576,39 +576,24 @@ function getActiveCanvas(){
   return curCv;
 }
 
-function _isCanvasEmpty(cv){
-  try{
-    var d=cv.ctx.getImageData(0,0,cv.canvas.width,cv.canvas.height).data;
-    for(var i=3;i<d.length;i+=4){if(d[i]>0)return false}
-    return true;
-  }catch(e){return false}
-}
-
 function _snapshot(cv){
   var snap=document.createElement("canvas");
   snap.width=cv.canvas.width;
   snap.height=cv.canvas.height;
-  var sCtx=snap.getContext("2d");
-  sCtx.drawImage(cv.canvas,0,0);
+  snap.getContext("2d").drawImage(cv.canvas,0,0);
   return snap;
 }
 
 function pushUndo(){
   var cv=getActiveCanvas();
   if(!cv)return;
-  /* Wait until the day's saved drawing has been drawn — otherwise the
-     captured snapshot would be empty and Undo could wipe the day. */
+  /* Safety net: never capture before the saved drawing is in place,
+     otherwise undo could wipe the day's existing handwriting. */
   if(cv.imgReady===false)return;
-  /* Defense in depth: if the canvas is empty AND we've previously seen
-     content, refuse to record this state so Undo can never erase the
-     existing handwriting. */
-  if(cv._everHadContent&&_isCanvasEmpty(cv))return;
   try{
-    var snap=_snapshot(cv);
-    undoList.push(snap);
+    undoList.push(_snapshot(cv));
     if(undoList.length>UNDO_MAX)undoList.shift();
     redoList=[];
-    if(!_isCanvasEmpty(cv))cv._everHadContent=true;
     updateUrBtns();
   }catch(e){}
 }
@@ -1194,10 +1179,22 @@ function bindDayEvents(existingImg){
   onTap(document.getElementById("btn-exp2"),function(){openFull()});
   onTap(document.getElementById("zr-i"),function(){if(curCv)resetZoom(curCv)});
 
-  setTimeout(function(){
-    curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",existingImg,420);
-    initTaskPanel();
-  },80);
+  /* Preload the saved drawing BEFORE creating the canvas so the user can
+     draw immediately on day open and undo/redo capture is correct. */
+  function _setupCanvas(preimg){
+    setTimeout(function(){
+      curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",preimg,420);
+      initTaskPanel();
+    },80);
+  }
+  if(existingImg){
+    var preimg=new Image();
+    preimg.onload=function(){_setupCanvas(preimg)};
+    preimg.onerror=function(){_setupCanvas(null)};
+    preimg.src=existingImg;
+  }else{
+    _setupCanvas(null);
+  }
 }
 
 /* Task panel logic */
@@ -1314,7 +1311,20 @@ function initTaskRow(cv){
   dbGet(ds).then(function(entry){
     if(entry&&entry.tasks&&entry.tasks[ti]&&entry.tasks[ti].drawing){
       var img=new Image();
-      img.onload=function(){ctx.drawImage(img,0,0,w,h)};
+      img.onload=function(){
+        /* Pixel-perfect blit: avoid scaling artifacts when reloading */
+        ctx.save();
+        ctx.setTransform(1,0,0,1,0,0);
+        if(img.naturalWidth===cv.width&&img.naturalHeight===cv.height){
+          ctx.imageSmoothingEnabled=false;
+          ctx.drawImage(img,0,0);
+        }else{
+          ctx.imageSmoothingEnabled=true;
+          try{ctx.imageSmoothingQuality="high"}catch(e){}
+          ctx.drawImage(img,0,0,cv.width,cv.height);
+        }
+        ctx.restore();
+      };
       img.src=entry.tasks[ti].drawing;
     }
   });
@@ -1451,18 +1461,44 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
     pinching:false,fingerPan:false,lastPanX:0,lastPanY:0,
     lastDist:0,lastMidX:0,lastMidY:0,
     zoomTm:null,
-    imgReady:!existingImg /* false until existing drawing is loaded — prevents undo from capturing an empty state */
+    imgReady:true /* preloaded by bindDayEvents before this point */
   };
 
+  /* Pixel-perfect blit of the saved drawing onto the backing buffer.
+     If the source PNG matches the canvas backing size, smoothing is
+     disabled for a 1:1 copy that preserves the original line quality.
+     Mismatched sizes (e.g. data saved at a different DPR) fall back to
+     high-quality bilinear scaling to avoid jagged artifacts. */
+  function _blitSaved(img){
+    if(!img)return;
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation="copy";
+    ctx.globalAlpha=1;
+    if(img.naturalWidth===cv.width&&img.naturalHeight===cv.height){
+      ctx.imageSmoothingEnabled=false;
+      ctx.drawImage(img,0,0);
+    }else{
+      ctx.imageSmoothingEnabled=true;
+      try{ctx.imageSmoothingQuality="high"}catch(e){}
+      ctx.drawImage(img,0,0,cv.width,cv.height);
+    }
+    ctx.restore();
+    info._everHadContent=true;
+  }
+
   if(existingImg){
-    var img=new Image();
-    img.onload=function(){
-      ctx.drawImage(img,0,0,w,h);
-      info.imgReady=true;
-      info._everHadContent=true; /* lock against pushUndo capturing an empty state */
-    };
-    img.onerror=function(){info.imgReady=true};
-    img.src=existingImg;
+    if(existingImg instanceof HTMLImageElement&&existingImg.complete&&existingImg.naturalWidth>0){
+      /* Preloaded — draw synchronously so user can interact immediately */
+      _blitSaved(existingImg);
+    }else if(typeof existingImg==="string"){
+      /* Legacy fallback: load from URL asynchronously */
+      info.imgReady=false;
+      var lImg=new Image();
+      lImg.onload=function(){_blitSaved(lImg);info.imgReady=true};
+      lImg.onerror=function(){info.imgReady=true};
+      lImg.src=existingImg;
+    }
   }
 
   var lx=0,ly=0,strokeStarted=false;
