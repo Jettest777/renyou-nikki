@@ -595,6 +595,77 @@ function autoPalm(e){
 }
 
 /* ============================
+   Past-entry auto-crop helpers
+   ----------------------------
+   Past saved drawings always cover the full canvas dimensions even when
+   the user wrote in only a small portion. To show just the actual
+   handwriting (no large blank space at the bottom), each past .pi canvas
+   loads its saved PNG, scans the alpha channel for the non-transparent
+   bounding box, then renders only that region with a small padding.
+   ============================ */
+function _findContentBbox(imgData){
+  var d=imgData.data,w=imgData.width,h=imgData.height;
+  var minX=w,minY=h,maxX=-1,maxY=-1,x,y;
+  /* Top edge */
+  for(y=0;y<h;y++){
+    for(x=0;x<w;x++){if(d[(y*w+x)*4+3]>0){minY=y;break}}
+    if(minY<h)break;
+  }
+  if(minY===h)return null;
+  /* Bottom edge */
+  for(y=h-1;y>=minY;y--){
+    for(x=0;x<w;x++){if(d[(y*w+x)*4+3]>0){maxY=y;break}}
+    if(maxY>=0)break;
+  }
+  /* Left edge (within row band) */
+  for(x=0;x<w;x++){
+    for(y=minY;y<=maxY;y++){if(d[(y*w+x)*4+3]>0){minX=x;break}}
+    if(minX<w)break;
+  }
+  /* Right edge */
+  for(x=w-1;x>=minX;x--){
+    for(y=minY;y<=maxY;y++){if(d[(y*w+x)*4+3]>0){maxX=x;break}}
+    if(maxX>=0)break;
+  }
+  return{x:minX,y:minY,w:maxX-minX+1,h:maxY-minY+1};
+}
+function _cropPiCanvas(canvas){
+  var src=canvas.getAttribute("data-src");
+  if(!src)return;
+  var img=new Image();
+  img.onload=function(){
+    var temp=document.createElement("canvas");
+    temp.width=img.naturalWidth;
+    temp.height=img.naturalHeight;
+    var tctx=temp.getContext("2d");
+    tctx.drawImage(img,0,0);
+    var data;
+    try{data=tctx.getImageData(0,0,temp.width,temp.height)}
+    catch(e){
+      canvas.width=img.naturalWidth;
+      canvas.height=img.naturalHeight;
+      canvas.getContext("2d").drawImage(img,0,0);
+      return;
+    }
+    var bbox=_findContentBbox(data);
+    if(!bbox){canvas.style.display="none";return}
+    /* Add a small padding around the content (≈2% of dimension, min 20 px) */
+    var pad=Math.max(20,Math.round(Math.min(temp.width,temp.height)*0.02));
+    var bx=Math.max(0,bbox.x-pad);
+    var by=Math.max(0,bbox.y-pad);
+    var bw=Math.min(temp.width,bbox.x+bbox.w+pad)-bx;
+    var bh=Math.min(temp.height,bbox.y+bbox.h+pad)-by;
+    canvas.width=bw;
+    canvas.height=bh;
+    var cctx=canvas.getContext("2d");
+    cctx.imageSmoothingEnabled=false;
+    cctx.drawImage(img,bx,by,bw,bh,0,0,bw,bh);
+  };
+  img.onerror=function(){canvas.style.display="none"};
+  img.src=src;
+}
+
+/* ============================
    Undo / Redo (synchronous canvas snapshots)
    ----------------------------
    Each entry is a fully-rendered offscreen <canvas> the same size as the
@@ -1240,7 +1311,7 @@ function renderDay(){
           if(p.sleep)h+='<span class="ec-s">&#128716; '+p.sleep+'h</span>';
           h+='</div><div class="ec-b">';
           if(p.text)h+='<div class="ptx">'+esc(p.text)+'</div>';
-          if(p.drawing)h+='<img class="pi" src="'+p.drawing+'" alt="'+pY+'年の手書き">';
+          if(p.drawing)h+='<canvas class="pi" data-src="'+p.drawing+'"></canvas>';
 
           /* Past tasks — wrap rows in grid for 3-row column flow */
           if(p.tasks&&p.tasks.length>0){
@@ -1332,6 +1403,9 @@ function renderDay(){
       }
 
       wrap.innerHTML=h;
+      /* Auto-crop each past handwriting canvas to its actual content */
+      var piList=document.querySelectorAll("canvas.pi[data-src]");
+      for(var pic=0;pic<piList.length;pic++)_cropPiCanvas(piList[pic]);
       bindDayEvents(entry.drawing||null);
     });
   }).catch(function(){
