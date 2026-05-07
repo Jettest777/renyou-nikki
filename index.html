@@ -189,17 +189,18 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .ptx{font-size:14px;line-height:1.8;white-space:pre-wrap;color:var(--text)}
 .pi{display:block;max-width:100%;max-height:240px;width:auto;height:auto;border-radius:8px;margin-top:8px;background:#fdfaf6}
 .ne{color:#ccc;font-size:14px;font-style:italic}
-/* Past-entry tasks/training sub-sections */
-.pt-sec{margin-top:14px;padding-top:12px;border-top:1px solid var(--bdr)}
-.pt-sec-h{font-size:13px;font-weight:700;color:var(--acc);margin-bottom:8px}
-.pt-row{display:flex;align-items:center;gap:8px;padding:4px 0;flex-wrap:wrap}
-.pt-row-sub{padding-left:24px}
-.pt-chk{display:inline-block;width:16px;height:16px;border:1.5px solid var(--bdr);border-radius:3px;flex-shrink:0;background:transparent;position:relative}
+/* Past-entry tasks/training sub-sections — compact, 2-column wrap after 3 rows */
+.pt-sec{margin-top:10px;padding-top:8px;border-top:1px solid var(--bdr)}
+.pt-sec-h{font-size:12px;font-weight:700;color:var(--acc);margin-bottom:6px}
+.pt-task-list,.pt-tr-rows{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,min-content);gap:3px 18px;align-items:start}
+.pt-row{display:flex;align-items:center;gap:5px;padding:1px 0;font-size:12px;flex-wrap:nowrap;min-width:0}
+.pt-row-sub{padding-left:0}
+.pt-chk{display:inline-block;width:13px;height:13px;border:1.5px solid var(--bdr);border-radius:3px;flex-shrink:0;background:transparent;position:relative}
 .pt-chk.done{border-color:var(--acc);background:var(--acc-lt)}
-.pt-chk.done::after{content:"";position:absolute;left:3px;top:0px;width:5px;height:9px;border:solid var(--acc);border-width:0 2px 2px 0;-webkit-transform:rotate(45deg);transform:rotate(45deg)}
-.pt-tr-cat-h{font-size:12px;font-weight:700;color:var(--text);margin-top:8px;margin-bottom:2px;display:flex;align-items:center;gap:6px}
-.pt-tr-lbl{font-size:12px;color:var(--sub);font-weight:600;min-width:42px}
-.pt-img{max-width:100%;max-height:64px;border:1px solid var(--bdr);border-radius:4px;background:#fdfaf6}
+.pt-chk.done::after{content:"";position:absolute;left:2px;top:-1px;width:4px;height:8px;border:solid var(--acc);border-width:0 1.5px 1.5px 0;-webkit-transform:rotate(45deg);transform:rotate(45deg)}
+.pt-tr-cat-h{font-size:11px;font-weight:700;color:var(--text);margin-top:6px;margin-bottom:2px;display:flex;align-items:center;gap:5px}
+.pt-tr-lbl{font-size:11px;color:var(--sub);font-weight:600;min-width:36px;flex-shrink:0}
+.pt-img{max-width:100%;max-height:32px;border:1px solid var(--bdr);border-radius:3px;background:#fdfaf6}
 .ec-y.tap{cursor:pointer;-webkit-transition:color .15s;transition:color .15s}
 .ec-y.tap:active{color:var(--text);text-decoration:underline}
 .sw{padding:20px;max-width:800px;margin:0 auto}
@@ -1241,18 +1242,25 @@ function renderDay(){
           if(p.text)h+='<div class="ptx">'+esc(p.text)+'</div>';
           if(p.drawing)h+='<img class="pi" src="'+p.drawing+'" alt="'+pY+'年の手書き">';
 
-          /* Past tasks */
+          /* Past tasks — wrap rows in grid for 3-row column flow */
           if(p.tasks&&p.tasks.length>0){
-            h+='<div class="pt-sec"><div class="pt-sec-h">&#9745; タスク</div>';
-            for(var pti=0;pti<p.tasks.length;pti++){
-              var pt=p.tasks[pti];
-              if(!pt.drawing&&!pt.done)continue;
-              h+='<div class="pt-row">';
-              h+='<span class="pt-chk'+(pt.done?" done":"")+'"></span>';
-              if(pt.drawing)h+='<img class="pt-img" src="'+pt.drawing+'" alt="">';
-              h+='</div>';
+            var visibleTasks=[];
+            for(var ptCount=0;ptCount<p.tasks.length;ptCount++){
+              var ptCheck=p.tasks[ptCount];
+              if(ptCheck.drawing||ptCheck.done)visibleTasks.push(ptCheck);
             }
-            h+='</div>';
+            if(visibleTasks.length>0){
+              h+='<div class="pt-sec"><div class="pt-sec-h">&#9745; タスク</div>';
+              h+='<div class="pt-task-list">';
+              for(var pti=0;pti<visibleTasks.length;pti++){
+                var pt=visibleTasks[pti];
+                h+='<div class="pt-row">';
+                h+='<span class="pt-chk'+(pt.done?" done":"")+'"></span>';
+                if(pt.drawing)h+='<img class="pt-img" src="'+pt.drawing+'" alt="">';
+                h+='</div>';
+              }
+              h+='</div></div>';
+            }
           }
 
           /* Past training */
@@ -1270,6 +1278,7 @@ function renderDay(){
               }
               if(hasMuscle){
                 h+='<div class="pt-tr-cat-h">筋トレ</div>';
+                h+='<div class="pt-tr-rows">';
                 for(var mi2=0;mi2<muscleParts.length;mi2++){
                   var mid2=muscleParts[mi2][0],mlbl=muscleParts[mi2][1];
                   var md=tr2[mid2];
@@ -1280,6 +1289,7 @@ function renderDay(){
                   if(md.drawing)h+='<img class="pt-img" src="'+md.drawing+'" alt="">';
                   h+='</div>';
                 }
+                h+='</div>';
               }
               /* ランニング */
               var runFs=[["running_distance","距離"],["running_time","時間"],["running_pace","ペース"]];
@@ -1287,6 +1297,7 @@ function renderDay(){
               for(var rfi=0;rfi<runFs.length;rfi++){if(tr2[runFs[rfi][0]]&&tr2[runFs[rfi][0]].drawing){hasRun=true;break}}
               if(hasRun){
                 h+='<div class="pt-tr-cat-h"><span class="pt-chk'+(tr2.running&&tr2.running.done?" done":"")+'"></span>ランニング</div>';
+                h+='<div class="pt-tr-rows">';
                 for(var rfi2=0;rfi2<runFs.length;rfi2++){
                   var rid=runFs[rfi2][0],rlbl=runFs[rfi2][1];
                   if(!tr2[rid]||!tr2[rid].drawing)continue;
@@ -1295,19 +1306,20 @@ function renderDay(){
                   h+='<img class="pt-img" src="'+tr2[rid].drawing+'" alt="">';
                   h+='</div>';
                 }
+                h+='</div>';
               }
               /* クロスフィット */
               if((tr2.crossfit&&tr2.crossfit.done)||(tr2.crossfit_menu&&tr2.crossfit_menu.drawing)){
                 h+='<div class="pt-tr-cat-h"><span class="pt-chk'+(tr2.crossfit&&tr2.crossfit.done?" done":"")+'"></span>クロスフィット</div>';
                 if(tr2.crossfit_menu&&tr2.crossfit_menu.drawing){
-                  h+='<div class="pt-row pt-row-sub"><span class="pt-tr-lbl">メニュー</span><img class="pt-img" src="'+tr2.crossfit_menu.drawing+'" alt=""></div>';
+                  h+='<div class="pt-tr-rows"><div class="pt-row pt-row-sub"><span class="pt-tr-lbl">メニュー</span><img class="pt-img" src="'+tr2.crossfit_menu.drawing+'" alt=""></div></div>';
                 }
               }
               /* その他 */
               if((tr2.other&&tr2.other.done)||(tr2.other_content&&tr2.other_content.drawing)){
                 h+='<div class="pt-tr-cat-h"><span class="pt-chk'+(tr2.other&&tr2.other.done?" done":"")+'"></span>その他</div>';
                 if(tr2.other_content&&tr2.other_content.drawing){
-                  h+='<div class="pt-row pt-row-sub"><img class="pt-img" src="'+tr2.other_content.drawing+'" alt=""></div>';
+                  h+='<div class="pt-tr-rows"><div class="pt-row pt-row-sub"><img class="pt-img" src="'+tr2.other_content.drawing+'" alt=""></div></div>';
                 }
               }
               h+='</div>';
@@ -1848,17 +1860,19 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
   };
 
   /* Pixel-perfect blit of the saved drawing onto the backing buffer.
-     If the source PNG matches the canvas backing size, smoothing is
-     disabled for a 1:1 copy that preserves the original line quality.
-     Mismatched sizes (e.g. data saved at a different DPR) fall back to
-     high-quality bilinear scaling to avoid jagged artifacts. */
+     A few-pixel rounding tolerance is allowed because flexbox layout
+     can yield sub-pixel-different widths between sessions; treat those
+     as a 1:1 match (no smoothing) so line quality is preserved. */
   function _blitSaved(img){
     if(!img)return;
     ctx.save();
     ctx.setTransform(1,0,0,1,0,0);
     ctx.globalCompositeOperation="copy";
     ctx.globalAlpha=1;
-    if(img.naturalWidth===cv.width&&img.naturalHeight===cv.height){
+    var dw=Math.abs(img.naturalWidth-cv.width);
+    var dh=Math.abs(img.naturalHeight-cv.height);
+    if(dw<=4&&dh<=4){
+      /* Treat near-identical sizes as 1:1 — sharp, no interpolation */
       ctx.imageSmoothingEnabled=false;
       ctx.drawImage(img,0,0);
     }else{
@@ -2055,6 +2069,7 @@ function openFull(){
     if(!fullCv||!confirm("手書きを全て消去しますか？"))return;
     pushUndo();
     fullCv.ctx.clearRect(0,0,fullCv.w,fullCv.h);
+    fullCv.dirty=true;
   });
   onTap(document.getElementById("zr-f"),function(){if(fullCv)resetZoom(fullCv)});
 
@@ -2072,8 +2087,10 @@ function openFull(){
     ctx.scale(dpr,dpr);
     fcv.style.transformOrigin="0 0";
 
-    // Copy from inline canvas
+    // Copy from inline canvas using high-quality smoothing
     if(curCv){
+      ctx.imageSmoothingEnabled=true;
+      try{ctx.imageSmoothingQuality="high"}catch(e){}
       ctx.drawImage(curCv.canvas,0,0,curCv.canvas.width,curCv.canvas.height,0,0,w,h);
     }
 
@@ -2085,7 +2102,8 @@ function openFull(){
       scrEl:document.getElementById("scr-f"),
       scale:1,tx:0,ty:0,pinching:false,fingerPan:false,lastPanX:0,lastPanY:0,
       lastDist:0,lastMidX:0,lastMidY:0,zoomTm:null,
-      imgReady:curCv?curCv.imgReady!==false:true
+      imgReady:curCv?curCv.imgReady!==false:true,
+      dirty:false /* track whether user actually drew on the fullscreen canvas */
     };
 
     var lx2=0,ly2=0,ss2=false;
@@ -2171,7 +2189,7 @@ function openFull(){
         e.preventDefault();
         var p=toCV2(e.touches[0].clientX,e.touches[0].clientY);
         var pr=0;if(typeof e.touches[0].force==="number")pr=e.touches[0].force;
-        if(!ss2){pushUndo();ss2=true}
+        if(!ss2){pushUndo();ss2=true;fullCv.dirty=true}
         var isScrub=false;
         if(pen.mode==="pen"){
           isScrub=addScrubPt(e.touches[0].clientX,e.touches[0].clientY);
@@ -2200,7 +2218,7 @@ function openFull(){
     fcv.addEventListener("mousemove",function(e){
       if(!isDraw)return;
       var p=toCV2(e.clientX,e.clientY);
-      if(!ss2){pushUndo();ss2=true}
+      if(!ss2){pushUndo();ss2=true;fullCv.dirty=true}
       var isScrub=false;
       if(pen.mode==="pen"){
         isScrub=addScrubPt(e.clientX,e.clientY);
@@ -2220,10 +2238,15 @@ function openFull(){
 }
 
 onTap(document.getElementById("btn-cvf-close"),function(){
-  if(fullCv&&curCv){
+  /* Only commit fullscreen content back to inline canvas if user actually
+     drew on it. Otherwise an unedited round-trip would lossy-resample the
+     existing handwriting and degrade saved quality. */
+  if(fullCv&&curCv&&fullCv.dirty){
     curCv.ctx.save();
     curCv.ctx.setTransform(curCv.dpr,0,0,curCv.dpr,0,0);
     curCv.ctx.clearRect(0,0,curCv.w,curCv.h);
+    curCv.ctx.imageSmoothingEnabled=true;
+    try{curCv.ctx.imageSmoothingQuality="high"}catch(e){}
     curCv.ctx.drawImage(fullCv.canvas,0,0,fullCv.canvas.width,fullCv.canvas.height,0,0,curCv.w,curCv.h);
     curCv.ctx.restore();
     triggerSave();
