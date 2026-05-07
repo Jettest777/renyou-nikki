@@ -192,7 +192,7 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 /* Past-entry tasks/training sub-sections — compact, 2-column wrap after 3 rows */
 .pt-sec{margin-top:10px;padding-top:8px;border-top:1px solid var(--bdr)}
 .pt-sec-h{font-size:12px;font-weight:700;color:var(--acc);margin-bottom:6px}
-.pt-task-list,.pt-tr-rows{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,min-content);gap:3px 18px;align-items:start}
+.pt-task-list,.pt-tr-rows{display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,min-content);grid-auto-columns:max-content;gap:3px 14px;align-items:start;justify-content:start}
 .pt-row{display:flex;align-items:center;gap:5px;padding:1px 0;font-size:12px;flex-wrap:nowrap;min-width:0}
 .pt-row-sub{padding-left:0}
 .pt-chk{display:inline-block;width:13px;height:13px;border:1.5px solid var(--bdr);border-radius:3px;flex-shrink:0;background:transparent;position:relative}
@@ -1130,7 +1130,7 @@ function renderDay(){
       function _trChkSvg(id){return '<svg viewBox="0 0 22 22"><rect x="1" y="1" width="20" height="20"/>'+(tr[id]&&tr[id].done?'<path d="M6 11 L10 15 L16 7"/>':'')+'</svg>'}
       h+='<div class="day-training">';
       h+='<div class="tr-panel">';
-      h+='<div class="tr-hdr"><span>&#128170; トレーニング</span>';
+      h+='<div class="tr-hdr"><span>&#128170; Training</span>';
       h+='<span class="tr-tools">';
       h+='<button class="ur tap off" id="btn-tr-undo" title="元に戻す">&#8592;</button>';
       h+='<button class="ur tap off" id="btn-tr-redo" title="やり直し">&#8594;</button>';
@@ -1185,7 +1185,7 @@ function renderDay(){
       /* === MIDDLE COLUMN: Handwriting (centered) === */
       h+='<div class="day-main">';
       h+='<div class="ec"><div class="ec-h">';
-      h+='<span class="ec-y cu">'+yr+'年</span>';
+      h+='<span class="ec-y cu">&#128212; Diary</span>';
       h+='<div class="sg"><label>&#128716; 睡眠</label>';
       h+='<input type="number" class="slp" id="slp" value="'+(entry.sleep||"")+'" min="0" max="24" step="0.5" placeholder="h">';
       h+='<label>時間</label></div></div>';
@@ -1206,7 +1206,7 @@ function renderDay(){
       var tasks=entry.tasks||[];
       h+='<div class="day-task">';
       h+='<div class="tk-panel">';
-      h+='<div class="tk-hdr"><span>&#9745; 本日のタスク</span>';
+      h+='<div class="tk-hdr"><span>&#9745; Tasks</span>';
       h+='<span class="tk-tools">';
       h+='<button class="ur tap off" id="btn-tk-undo" title="元に戻す">&#8592;</button>';
       h+='<button class="ur tap off" id="btn-tk-redo" title="やり直し">&#8594;</button>';
