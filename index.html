@@ -2819,6 +2819,47 @@ function renderStats(){
       yb+='<span style="font-size:13px;color:var(--sub);min-width:45px;text-align:right">'+cnt+"日</span></div>";
     }
 
+    /* Training stats: monthly per-category + yearly total */
+    var trItems=[
+      {id:"muscle_legs",label:"脚"},
+      {id:"muscle_chest",label:"胸"},
+      {id:"muscle_shoulder",label:"肩"},
+      {id:"muscle_back",label:"背中"},
+      {id:"muscle_arms",label:"腕"},
+      {id:"running",label:"ランニング"},
+      {id:"crossfit",label:"クロスフィット"},
+      {id:"other",label:"その他"}
+    ];
+    var monthCounts={},yearTotal=0,monthTotal=0;
+    for(i=0;i<trItems.length;i++)monthCounts[trItems[i].id]=0;
+    var thisYear=String(now.getFullYear());
+    var thisMonthYM=thisYear+"-"+p2(now.getMonth()+1);
+    for(i=0;i<a.length;i++){
+      var ent=a[i];
+      if(!ent.training)continue;
+      var entYear=ent.date.substring(0,4);
+      var entYM=ent.date.substring(0,7);
+      for(j=0;j<trItems.length;j++){
+        var tid=trItems[j].id;
+        if(ent.training[tid]&&ent.training[tid].done){
+          if(entYear===thisYear)yearTotal++;
+          if(entYM===thisMonthYM){monthCounts[tid]++;monthTotal++}
+        }
+      }
+    }
+    var trMax=1;
+    for(i=0;i<trItems.length;i++)if(monthCounts[trItems[i].id]>trMax)trMax=monthCounts[trItems[i].id];
+    var trBars="";
+    for(i=0;i<trItems.length;i++){
+      var trItem=trItems[i];
+      var trCnt=monthCounts[trItem.id];
+      trBars+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0">';
+      trBars+='<span style="font-size:13px;font-weight:600;min-width:90px">'+trItem.label+"</span>";
+      trBars+='<div style="flex:1;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">';
+      trBars+='<div style="height:100%;width:'+(trCnt/trMax*100)+'%;background:var(--acc);border-radius:4px"></div></div>';
+      trBars+='<span style="font-size:13px;color:var(--sub);min-width:35px;text-align:right">'+trCnt+"回</span></div>";
+    }
+
     var h='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">';
     h+='<div class="sc"><h3>総日記数</h3><div class="svl">'+total+'</div><div class="ssu">'+(yrs.length>0?sy+"年から":"まだ記録なし")+"</div></div>";
     h+='<div class="sc"><h3>連続記録</h3><div class="svl">'+streak+'</div><div class="ssu">日連続</div></div>';
@@ -2827,6 +2868,13 @@ function renderStats(){
     h+='<div class="sc" style="margin-top:12px"><h3>'+now.getFullYear()+'年の月別記録</h3>';
     h+='<div style="display:flex;align-items:flex-end;gap:6px;height:120px;margin-top:12px">'+bars+"</div></div>";
     if(yrs.length>0)h+='<div class="sc" style="margin-top:12px"><h3>年ごとの記録数</h3>'+yb+"</div>";
+
+    /* Training summary section — mirrors the diary stats layout */
+    h+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:16px;margin-bottom:16px">';
+    h+='<div class="sc"><h3>今月のトレーニング</h3><div class="svl">'+monthTotal+'</div><div class="ssu">'+(now.getMonth()+1)+'月の合計</div></div>';
+    h+='<div class="sc"><h3>年間トレーニング</h3><div class="svl">'+yearTotal+'</div><div class="ssu">'+now.getFullYear()+'年の合計</div></div>';
+    h+='</div>';
+    h+='<div class="sc"><h3>'+(now.getMonth()+1)+'月の項目別トレーニング</h3>'+trBars+"</div>";
     wrap.innerHTML=h;
   }).catch(function(){});
 }
