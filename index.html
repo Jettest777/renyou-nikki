@@ -1180,6 +1180,21 @@ function renderDay(){
 
   dbGet(ds).then(function(entry){
     entry=entry||{};
+    /* Restore the high-resolution fullscreen snapshot if persisted, so
+       reopening fullscreen after an app reload uses the original quality. */
+    if(entry.drawingHi){
+      var hiImg=new Image();
+      hiImg.onload=function(){
+        try{
+          _fullCvSnapshot=document.createElement("canvas");
+          _fullCvSnapshot.width=entry.drawingHiW||hiImg.naturalWidth;
+          _fullCvSnapshot.height=entry.drawingHiH||hiImg.naturalHeight;
+          _fullCvSnapshot.getContext("2d").drawImage(hiImg,0,0);
+        }catch(snapErr){_fullCvSnapshot=null}
+      };
+      hiImg.onerror=function(){_fullCvSnapshot=null};
+      hiImg.src=entry.drawingHi;
+    }
     return dbByIdx("monthDay",md).then(function(pastAll){
       var past=[],i;
       for(i=0;i<pastAll.length;i++){
@@ -1412,14 +1427,15 @@ function renderDay(){
       /* Auto-crop each past handwriting canvas to its actual content */
       var piList=document.querySelectorAll("canvas.pi[data-src]");
       for(var pic=0;pic<piList.length;pic++)_cropPiCanvas(piList[pic]);
-      bindDayEvents(entry.drawing||null);
+      var savedDims=entry.drawingW&&entry.drawingH?{w:entry.drawingW,h:entry.drawingH}:null;
+      bindDayEvents(entry.drawing||null,savedDims);
     });
   }).catch(function(){
     wrap.innerHTML='<p style="padding:20px;color:var(--sub)">日記を読み込めませんでした。ページを再読み込みしてください。</p>';
   });
 }
 
-function bindDayEvents(existingImg){
+function bindDayEvents(existingImg,savedDims){
   onTap(document.getElementById("btn-pd"),function(){navDay(-1)});
   onTap(document.getElementById("btn-nd"),function(){navDay(1)});
 
@@ -1440,7 +1456,7 @@ function bindDayEvents(existingImg){
      draw immediately on day open and undo/redo capture is correct. */
   function _setupCanvas(preimg){
     setTimeout(function(){
-      curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",preimg,420);
+      curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",preimg,420,savedDims);
       initTaskPanel();
     },80);
   }
@@ -1907,7 +1923,7 @@ function navDay(d){
 /* ============================
    Canvas engine
    ============================ */
-function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
+function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   var cv=document.getElementById(cvId);
   var box=document.getElementById(boxId);
   var ercEl=document.getElementById(ercId);
@@ -1918,19 +1934,33 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
 
   var ctx=cv.getContext("2d",{desynchronized:true})||cv.getContext("2d");
   var rect=box.getBoundingClientRect();
-  /* Standard device DPR — keeps memory bounded for reliable undo/redo */
-  var dpr=window.devicePixelRatio||2;
+  var devDpr=window.devicePixelRatio||2;
   var w=rect.width,h=hPx||rect.height;
 
   cv.style.width=w+"px";
   cv.style.height=h+"px";
-  cv.width=w*dpr;
-  cv.height=h*dpr;
-  ctx.scale(dpr,dpr);
+
+  /* Use saved backing dimensions if available so reload becomes a 1:1
+     lossless restore. Without this, sub-pixel layout differences between
+     sessions cause drawImage to apply bilinear smoothing, which slowly
+     blurs the saved drawing on every reload. */
+  var bbW,bbH,useDpr;
+  if(savedDims&&savedDims.w&&savedDims.h){
+    bbW=savedDims.w;
+    bbH=savedDims.h;
+    useDpr=bbW/w;
+  }else{
+    bbW=Math.round(w*devDpr);
+    bbH=Math.round(h*devDpr);
+    useDpr=devDpr;
+  }
+  cv.width=bbW;
+  cv.height=bbH;
+  ctx.scale(useDpr,useDpr);
   cv.style.transformOrigin="0 0";
 
   var info={
-    canvas:cv,ctx:ctx,w:w,h:h,dpr:dpr,box:box,
+    canvas:cv,ctx:ctx,w:w,h:h,dpr:useDpr,box:box,
     ercEl:ercEl,ziEl:ziEl,zrEl:zrEl,scrEl:scrEl,
     scale:1,tx:0,ty:0,
     pinching:false,fingerPan:false,lastPanX:0,lastPanY:0,
@@ -2164,27 +2194,39 @@ function openFull(){
     var bodyRect=body.getBoundingClientRect();
 
     /* Fill the fullscreen body — ruled lines cover the whole screen */
-    var dpr=window.devicePixelRatio||2;
+    var devDpr=window.devicePixelRatio||2;
     var w=bodyRect.width,h=bodyRect.height;
 
-    fcv.width=w*dpr;
-    fcv.height=h*dpr;
-    fcv.style.width=w+"px";
-    fcv.style.height=h+"px";
     /* Reset any leftover positioning from a previous open */
     fcv.style.position="";
     fcv.style.left="";
     fcv.style.top="";
+    fcv.style.width=w+"px";
+    fcv.style.height=h+"px";
+
+    /* Match the canvas backing buffer to the available snapshot so the
+       restore is a 1:1 lossless copy regardless of body-size changes
+       between sessions. Without this, varying body dimensions would
+       force a re-upscale and degrade the cached quality. */
+    var dpr;
+    if(_fullCvSnapshot){
+      fcv.width=_fullCvSnapshot.width;
+      fcv.height=_fullCvSnapshot.height;
+      dpr=fcv.width/w;
+    }else{
+      fcv.width=Math.round(w*devDpr);
+      fcv.height=Math.round(h*devDpr);
+      dpr=devDpr;
+    }
     var ctx=fcv.getContext("2d",{desynchronized:true})||fcv.getContext("2d");
     ctx.scale(dpr,dpr);
     fcv.style.transformOrigin="0 0";
 
-    /* Restore the fullscreen view from a previous session-cached
-       snapshot if the canvas backing matches; otherwise upscale from the
-       inline canvas (which is the only available source). The snapshot
-       prevents quality from degrading on repeated open/close cycles. */
-    var fromSnapshot=(_fullCvSnapshot&&_fullCvSnapshot.width===fcv.width&&_fullCvSnapshot.height===fcv.height);
-    if(fromSnapshot){
+    /* Restore the fullscreen view from a session-cached or persisted
+       snapshot if available; otherwise upscale from the inline canvas
+       (which is the only available source). The snapshot prevents
+       quality from degrading on repeated open/close cycles. */
+    if(_fullCvSnapshot){
       ctx.save();
       ctx.setTransform(1,0,0,1,0,0);
       ctx.imageSmoothingEnabled=false;
@@ -2444,9 +2486,28 @@ function triggerSave(){
 
     if(!drawData&&!sleep&&taskData.length===0&&trKeys.length===0)return;
 
+    /* Save the canvas backing dimensions so reload can rebuild a canvas
+       at the EXACT same size — this lets _blitSaved take the no-smoothing
+       1:1 path and prevents reload-time blur. */
+    var drawingW=null,drawingH=null;
+    if(drawData&&curCv){drawingW=curCv.canvas.width;drawingH=curCv.canvas.height}
+
+    /* Persist the high-resolution fullscreen snapshot so reopening
+       fullscreen after an app reload restores at the original quality. */
+    var drawingHi=null,drawingHiW=null,drawingHiH=null;
+    if(_fullCvSnapshot){
+      try{
+        drawingHi=_fullCvSnapshot.toDataURL("image/png");
+        drawingHiW=_fullCvSnapshot.width;
+        drawingHiH=_fullCvSnapshot.height;
+      }catch(snapErr){}
+    }
+
     var entry={
       id:ds,date:ds,monthDay:gmd(sel),yearMonth:ds.substring(0,7),
-      drawing:drawData,sleep:sleep,
+      drawing:drawData,drawingW:drawingW,drawingH:drawingH,
+      drawingHi:drawingHi,drawingHiW:drawingHiW,drawingHiH:drawingHiH,
+      sleep:sleep,
       tasks:taskData.length>0?taskData:null,
       training:trKeys.length>0?trainingData:null,
       updatedAt:new Date().toISOString(),
