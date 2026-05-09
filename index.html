@@ -531,6 +531,12 @@ function autoBackup(){
 var now=new Date();
 var cY=now.getFullYear(),cM=now.getMonth(),sel=new Date(now);
 var curCv=null,fullCv=null;
+/* Off-screen canvas remembering the fullCv backing buffer between
+   open/close cycles. Restoring from this snapshot keeps the fullscreen
+   view sharp even after multiple round-trips, since we never re-upscale
+   from the lower-resolution inline canvas. Invalidated whenever the
+   inline view is edited or the day is switched. */
+var _fullCvSnapshot=null;
 var isDraw=false,svTm=null;
 var WD=["日","月","火","水","木","金","土"];
 var WDC=["su","wd","wd","wd","wd","wd","sa"];
@@ -1168,7 +1174,7 @@ function bindToolbar(container,clearFn){
    Day View
    ============================ */
 function renderDay(){
-  undoList=[];redoList=[];
+  undoList=[];redoList=[];_fullCvSnapshot=null;
   var wrap=document.getElementById("dw");
   var ds=fmt(sel),md=gmd(sel),dw=sel.getDay(),yr=sel.getFullYear();
 
@@ -2070,7 +2076,7 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
       var p=toCV(tx0,ty0);
       var pr=0;
       if(typeof e.touches[0].force==="number")pr=e.touches[0].force;
-      if(!strokeStarted){pushUndo();strokeStarted=true}
+      if(!strokeStarted){pushUndo();strokeStarted=true;_fullCvSnapshot=null}
       // Scrub detection using SCREEN coordinates
       var isScrub=false;
       if(pen.mode==="pen"){
@@ -2107,7 +2113,7 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
   cv.addEventListener("mousemove",function(e){
     if(!isDraw)return;
     var p=toCV(e.clientX,e.clientY);
-    if(!strokeStarted){pushUndo();strokeStarted=true}
+    if(!strokeStarted){pushUndo();strokeStarted=true;_fullCvSnapshot=null}
     var isScrub=false;
     if(pen.mode==="pen"){
       isScrub=addScrubPt(e.clientX,e.clientY);
@@ -2157,49 +2163,41 @@ function openFull(){
     var fcv=document.getElementById("cvf-cv");
     var bodyRect=body.getBoundingClientRect();
 
-    /* Match curCv's backing buffer EXACTLY so fullCv↔curCv copies become
-       1:1 pixel transfers — no scaling either direction, no cumulative
-       blur after repeated open/close cycles. */
-    var devDpr=window.devicePixelRatio||2;
-    var cvBackingW=curCv?curCv.canvas.width:Math.round(bodyRect.width*devDpr);
-    var cvBackingH=curCv?curCv.canvas.height:Math.round(bodyRect.height*devDpr);
+    /* Fill the fullscreen body — ruled lines cover the whole screen */
+    var dpr=window.devicePixelRatio||2;
+    var w=bodyRect.width,h=bodyRect.height;
 
-    /* Aspect-fit canvas inside fullscreen body (preserve canvas aspect ratio) */
-    var cvAspect=cvBackingW/cvBackingH;
-    var bodyAspect=bodyRect.width/bodyRect.height;
-    var cssW,cssH;
-    if(cvAspect>=bodyAspect){
-      cssW=bodyRect.width;
-      cssH=cssW/cvAspect;
-    }else{
-      cssH=bodyRect.height;
-      cssW=cssH*cvAspect;
-    }
-
-    fcv.width=cvBackingW;
-    fcv.height=cvBackingH;
-    fcv.style.width=cssW+"px";
-    fcv.style.height=cssH+"px";
-    fcv.style.position="absolute";
-    fcv.style.left=Math.round((bodyRect.width-cssW)/2)+"px";
-    fcv.style.top=Math.round((bodyRect.height-cssH)/2)+"px";
+    fcv.width=w*dpr;
+    fcv.height=h*dpr;
+    fcv.style.width=w+"px";
+    fcv.style.height=h+"px";
+    /* Reset any leftover positioning from a previous open */
+    fcv.style.position="";
+    fcv.style.left="";
+    fcv.style.top="";
     var ctx=fcv.getContext("2d",{desynchronized:true})||fcv.getContext("2d");
-    /* Effective DPR maps CSS pixels (drawing coords) to backing pixels */
-    var effDpr=cvBackingW/cssW;
-    ctx.scale(effDpr,effDpr);
+    ctx.scale(dpr,dpr);
     fcv.style.transformOrigin="0 0";
 
-    /* Lossless 1:1 copy from inline canvas */
-    if(curCv){
+    /* Restore the fullscreen view from a previous session-cached
+       snapshot if the canvas backing matches; otherwise upscale from the
+       inline canvas (which is the only available source). The snapshot
+       prevents quality from degrading on repeated open/close cycles. */
+    var fromSnapshot=(_fullCvSnapshot&&_fullCvSnapshot.width===fcv.width&&_fullCvSnapshot.height===fcv.height);
+    if(fromSnapshot){
       ctx.save();
       ctx.setTransform(1,0,0,1,0,0);
       ctx.imageSmoothingEnabled=false;
-      ctx.drawImage(curCv.canvas,0,0);
+      ctx.drawImage(_fullCvSnapshot,0,0);
       ctx.restore();
+    }else if(curCv){
+      ctx.imageSmoothingEnabled=true;
+      try{ctx.imageSmoothingQuality="high"}catch(e){}
+      ctx.drawImage(curCv.canvas,0,0,curCv.canvas.width,curCv.canvas.height,0,0,w,h);
     }
 
     fullCv={
-      canvas:fcv,ctx:ctx,w:cssW,h:cssH,dpr:effDpr,box:body,
+      canvas:fcv,ctx:ctx,w:w,h:h,dpr:dpr,box:body,
       ercEl:document.getElementById("erc-f"),
       ziEl:document.getElementById("zi-f"),
       zrEl:document.getElementById("zr-f"),
@@ -2215,8 +2213,10 @@ function openFull(){
     var fcvRectCache=null;
     function _fcvRect(){return fcvRectCache||(fcvRectCache=fcv.getBoundingClientRect())}
     function toCV2(tx,ty){
+      /* canvas's bounding rect already reflects the CSS transform's
+         translation, so we only divide out the zoom scale. */
       var r=_fcvRect();
-      return{x:(tx-r.left-fullCv.tx)/fullCv.scale,y:(ty-r.top-fullCv.ty)/fullCv.scale};
+      return{x:(tx-r.left)/fullCv.scale,y:(ty-r.top)/fullCv.scale};
     }
     function dist3(t){var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy)}
     function mid3(t){return{x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2}}
@@ -2346,17 +2346,30 @@ function openFull(){
 }
 
 onTap(document.getElementById("btn-cvf-close"),function(){
-  /* Only commit fullscreen content back to inline canvas if user actually
-     drew on it. fullCv now matches curCv's backing buffer dimensions so
-     this is a 1:1 pixel copy — no scaling, no quality loss, even after
-     repeated open/close cycles. */
-  if(fullCv&&curCv&&fullCv.dirty){
-    curCv.ctx.save();
-    curCv.ctx.setTransform(1,0,0,1,0,0);
-    curCv.ctx.imageSmoothingEnabled=false;
-    curCv.ctx.drawImage(fullCv.canvas,0,0);
-    curCv.ctx.restore();
-    triggerSave();
+  if(fullCv){
+    /* Always cache the current fullCv backing for the next open. This
+       way the fullscreen view restores 1:1 from the snapshot instead of
+       re-upscaling from the (lower-resolution) inline curCv, which is
+       what caused cumulative blur on repeated reopens. */
+    try{
+      _fullCvSnapshot=document.createElement("canvas");
+      _fullCvSnapshot.width=fullCv.canvas.width;
+      _fullCvSnapshot.height=fullCv.canvas.height;
+      _fullCvSnapshot.getContext("2d").drawImage(fullCv.canvas,0,0);
+    }catch(e){_fullCvSnapshot=null}
+
+    /* Only commit content back to inline canvas if user actually drew.
+       This avoids unnecessary downsampling on quick open/close cycles. */
+    if(curCv&&fullCv.dirty){
+      curCv.ctx.save();
+      curCv.ctx.setTransform(curCv.dpr,0,0,curCv.dpr,0,0);
+      curCv.ctx.clearRect(0,0,curCv.w,curCv.h);
+      curCv.ctx.imageSmoothingEnabled=true;
+      try{curCv.ctx.imageSmoothingQuality="high"}catch(e){}
+      curCv.ctx.drawImage(fullCv.canvas,0,0,fullCv.canvas.width,fullCv.canvas.height,0,0,curCv.w,curCv.h);
+      curCv.ctx.restore();
+      triggerSave();
+    }
   }
   document.getElementById("cvf").classList.remove("on");
   fullCv=null;
