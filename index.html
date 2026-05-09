@@ -1973,9 +1973,13 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
   }
 
   var lx=0,ly=0,strokeStarted=false;
+  /* Cache the canvas-box rect for the duration of a stroke so each
+     touchmove avoids forcing layout reflow via getBoundingClientRect. */
+  var boxRectCache=null;
+  function _boxRect(){return boxRectCache||(boxRectCache=box.getBoundingClientRect())}
 
   function toCV(tx,ty){
-    var r=box.getBoundingClientRect();
+    var r=_boxRect();
     return{x:(tx-r.left-info.tx)/info.scale,y:(ty-r.top-info.ty)/info.scale};
   }
   function dist2(t){var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy)}
@@ -1997,7 +2001,7 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
 
   function showERC(clientX,clientY){
     if(!ercEl||pen.mode!=="eraser")return;
-    var r=box.getBoundingClientRect();
+    var r=_boxRect();
     ercEl.style.display="block";
     ercEl.style.width=pen.eraserSize*info.scale+"px";
     ercEl.style.height=pen.eraserSize*info.scale+"px";
@@ -2009,6 +2013,7 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
   /* Touch */
   cv.addEventListener("touchstart",function(e){
     autoPalm(e);
+    boxRectCache=box.getBoundingClientRect(); /* refresh once per stroke */
     if(e.touches.length===2){
       info.pinching=true;isDraw=false;info.fingerPan=false;
       info.lastDist=dist2(e.touches);
@@ -2085,12 +2090,12 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx){
   cv.addEventListener("touchend",function(e){
     if(e.touches.length<2){info.pinching=false;info.fingerPan=false}
     if(isDraw&&e.touches.length===0){
-      isDraw=false;triggerSave();hideERC();resetScrub();updateUrBtns();
+      isDraw=false;triggerSave();hideERC();resetScrub();updateUrBtns();boxRectCache=null;
     }
   },{passive:false});
 
   cv.addEventListener("touchcancel",function(){
-    info.pinching=false;info.fingerPan=false;isDraw=false;hideERC();resetScrub();
+    info.pinching=false;info.fingerPan=false;isDraw=false;hideERC();resetScrub();boxRectCache=null;
   },{passive:false});
 
   /* Mouse fallback */
@@ -2150,26 +2155,51 @@ function openFull(){
   setTimeout(function(){
     var body=document.getElementById("cvf-body");
     var fcv=document.getElementById("cvf-cv");
-    var rect=body.getBoundingClientRect();
-    /* Standard device DPR — keeps memory bounded for reliable undo/redo */
-    var dpr=window.devicePixelRatio||2;
-    var w=rect.width,h=rect.height;
+    var bodyRect=body.getBoundingClientRect();
 
-    fcv.style.width=w+"px";fcv.style.height=h+"px";
-    fcv.width=w*dpr;fcv.height=h*dpr;
+    /* Match curCv's backing buffer EXACTLY so fullCv↔curCv copies become
+       1:1 pixel transfers — no scaling either direction, no cumulative
+       blur after repeated open/close cycles. */
+    var devDpr=window.devicePixelRatio||2;
+    var cvBackingW=curCv?curCv.canvas.width:Math.round(bodyRect.width*devDpr);
+    var cvBackingH=curCv?curCv.canvas.height:Math.round(bodyRect.height*devDpr);
+
+    /* Aspect-fit canvas inside fullscreen body (preserve canvas aspect ratio) */
+    var cvAspect=cvBackingW/cvBackingH;
+    var bodyAspect=bodyRect.width/bodyRect.height;
+    var cssW,cssH;
+    if(cvAspect>=bodyAspect){
+      cssW=bodyRect.width;
+      cssH=cssW/cvAspect;
+    }else{
+      cssH=bodyRect.height;
+      cssW=cssH*cvAspect;
+    }
+
+    fcv.width=cvBackingW;
+    fcv.height=cvBackingH;
+    fcv.style.width=cssW+"px";
+    fcv.style.height=cssH+"px";
+    fcv.style.position="absolute";
+    fcv.style.left=Math.round((bodyRect.width-cssW)/2)+"px";
+    fcv.style.top=Math.round((bodyRect.height-cssH)/2)+"px";
     var ctx=fcv.getContext("2d",{desynchronized:true})||fcv.getContext("2d");
-    ctx.scale(dpr,dpr);
+    /* Effective DPR maps CSS pixels (drawing coords) to backing pixels */
+    var effDpr=cvBackingW/cssW;
+    ctx.scale(effDpr,effDpr);
     fcv.style.transformOrigin="0 0";
 
-    // Copy from inline canvas using high-quality smoothing
+    /* Lossless 1:1 copy from inline canvas */
     if(curCv){
-      ctx.imageSmoothingEnabled=true;
-      try{ctx.imageSmoothingQuality="high"}catch(e){}
-      ctx.drawImage(curCv.canvas,0,0,curCv.canvas.width,curCv.canvas.height,0,0,w,h);
+      ctx.save();
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.imageSmoothingEnabled=false;
+      ctx.drawImage(curCv.canvas,0,0);
+      ctx.restore();
     }
 
     fullCv={
-      canvas:fcv,ctx:ctx,w:w,h:h,dpr:dpr,box:body,
+      canvas:fcv,ctx:ctx,w:cssW,h:cssH,dpr:effDpr,box:body,
       ercEl:document.getElementById("erc-f"),
       ziEl:document.getElementById("zi-f"),
       zrEl:document.getElementById("zr-f"),
@@ -2181,8 +2211,11 @@ function openFull(){
     };
 
     var lx2=0,ly2=0,ss2=false;
+    /* Cached canvas rect refreshed at stroke start — avoids per-touchmove layout */
+    var fcvRectCache=null;
+    function _fcvRect(){return fcvRectCache||(fcvRectCache=fcv.getBoundingClientRect())}
     function toCV2(tx,ty){
-      var r=body.getBoundingClientRect();
+      var r=_fcvRect();
       return{x:(tx-r.left-fullCv.tx)/fullCv.scale,y:(ty-r.top-fullCv.ty)/fullCv.scale};
     }
     function dist3(t){var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy)}
@@ -2201,7 +2234,7 @@ function openFull(){
     }
     function showERC2(cx,cy){
       if(!fullCv.ercEl||pen.mode!=="eraser")return;
-      var r=body.getBoundingClientRect();
+      var r=_fcvRect();
       fullCv.ercEl.style.display="block";
       fullCv.ercEl.style.width=pen.eraserSize*fullCv.scale+"px";
       fullCv.ercEl.style.height=pen.eraserSize*fullCv.scale+"px";
@@ -2212,6 +2245,7 @@ function openFull(){
 
     fcv.addEventListener("touchstart",function(e){
       autoPalm(e);
+      fcvRectCache=fcv.getBoundingClientRect(); /* refresh once per stroke */
       if(e.touches.length===2){
         fullCv.pinching=true;isDraw=false;fullCv.fingerPan=false;
         fullCv.lastDist=dist3(e.touches);
@@ -2278,7 +2312,7 @@ function openFull(){
 
     fcv.addEventListener("touchend",function(e){
       if(e.touches.length<2){fullCv.pinching=false;fullCv.fingerPan=false}
-      if(isDraw&&e.touches.length===0){isDraw=false;hideERC2();resetScrub();updateUrBtns()}
+      if(isDraw&&e.touches.length===0){isDraw=false;hideERC2();resetScrub();updateUrBtns();fcvRectCache=null}
     },{passive:false});
 
     fcv.addEventListener("touchcancel",function(){
@@ -2313,15 +2347,14 @@ function openFull(){
 
 onTap(document.getElementById("btn-cvf-close"),function(){
   /* Only commit fullscreen content back to inline canvas if user actually
-     drew on it. Otherwise an unedited round-trip would lossy-resample the
-     existing handwriting and degrade saved quality. */
+     drew on it. fullCv now matches curCv's backing buffer dimensions so
+     this is a 1:1 pixel copy — no scaling, no quality loss, even after
+     repeated open/close cycles. */
   if(fullCv&&curCv&&fullCv.dirty){
     curCv.ctx.save();
-    curCv.ctx.setTransform(curCv.dpr,0,0,curCv.dpr,0,0);
-    curCv.ctx.clearRect(0,0,curCv.w,curCv.h);
-    curCv.ctx.imageSmoothingEnabled=true;
-    try{curCv.ctx.imageSmoothingQuality="high"}catch(e){}
-    curCv.ctx.drawImage(fullCv.canvas,0,0,fullCv.canvas.width,fullCv.canvas.height,0,0,curCv.w,curCv.h);
+    curCv.ctx.setTransform(1,0,0,1,0,0);
+    curCv.ctx.imageSmoothingEnabled=false;
+    curCv.ctx.drawImage(fullCv.canvas,0,0);
     curCv.ctx.restore();
     triggerSave();
   }
