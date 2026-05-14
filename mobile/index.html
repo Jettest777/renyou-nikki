@@ -63,6 +63,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
 .tr-cat-h{padding:9px 14px;background:var(--acc-lt);font-size:12px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
 .tr-cat-h .tk-c{width:20px;height:20px}
 .tr-lbl{font-size:11px;color:var(--sub);font-weight:600;margin-bottom:3px}
+.tr-edit{cursor:pointer;-webkit-user-select:none;user-select:none;border-radius:6px;padding:4px 6px;margin:-4px -6px}
+.tr-edit:active{background:rgba(192,104,64,.08)}
+.tr-txt{font-size:13px;color:var(--text);margin-top:3px;line-height:1.4;word-wrap:break-word;white-space:pre-wrap}
+.tr-add-hint{font-size:11px;color:var(--sub);font-style:italic;opacity:0.55}
 .empty{padding:30px 16px;text-align:center;color:var(--sub);font-size:13px}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center;z-index:1000}
 .modal.on{display:flex}
@@ -131,6 +135,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
     <div class="modal-btns">
       <button class="cancel" id="cancelBtn">キャンセル</button>
       <button class="ok" id="okBtn">追加</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="trModal">
+  <div class="modal-c">
+    <h3 id="trModalTitle">トレーニング詳細</h3>
+    <textarea id="trInput" placeholder="例：スクワット 5x10、ベンチプレス 60kg..."></textarea>
+    <div class="modal-btns">
+      <button class="cancel" id="trCancel">キャンセル</button>
+      <button class="ok" id="trOk">保存</button>
     </div>
   </div>
 </div>
@@ -534,10 +549,12 @@ function renderTraining(entry){
       }else{
         h+='<div style="width:24px;flex-shrink:0"></div>';
       }
-      h+='<div class="tk-cn">';
+      var editLabel=row.label||item.cat;
+      h+='<div class="tk-cn tr-edit" data-tr-edit="'+row.id+'" data-tr-label="'+escapeHtml(editLabel)+'">';
       if(row.label)h+='<div class="tr-lbl">'+row.label+'</div>';
       if(data.drawing)h+='<canvas data-src="'+data.drawing+'"></canvas>';
-      else h+='<div class="tk-tx" style="color:#ccc;font-size:12px">—</div>';
+      if(data.text)h+='<div class="tr-txt">'+escapeHtml(data.text)+'</div>';
+      if(!data.drawing&&!data.text)h+='<div class="tr-add-hint">タップしてメモを追加</div>';
       h+='</div></div>';
     }
     h+='</div>';
@@ -547,9 +564,19 @@ function renderTraining(entry){
   for(var c=0;c<cvs.length;c++)renderCropped(cvs[c],cvs[c].getAttribute("data-src"));
   var chks=list.querySelectorAll(".tk-c[data-tr]");
   for(var k=0;k<chks.length;k++){
-    chks[k].addEventListener("click",function(){
+    chks[k].addEventListener("click",function(e){
+      e.stopPropagation();
       var id=this.getAttribute("data-tr");
       toggleTraining(id);
+    });
+  }
+  /* Tap on the content area opens the text editor for that training row */
+  var edits=list.querySelectorAll(".tr-edit");
+  for(var ee=0;ee<edits.length;ee++){
+    edits[ee].addEventListener("click",function(){
+      var id=this.getAttribute("data-tr-edit");
+      var lbl=this.getAttribute("data-tr-label")||"";
+      openTrEdit(id,lbl);
     });
   }
 }
@@ -604,6 +631,41 @@ function addTextTask(text){
   });
 }
 
+var _editingTrId=null;
+function openTrEdit(id,label){
+  _editingTrId=id;
+  ensureEntry().then(function(entry){
+    var t=((entry.training||{})[id])||{};
+    document.getElementById("trModalTitle").textContent=(label||"トレーニング")+"のメモ";
+    document.getElementById("trInput").value=t.text||"";
+    document.getElementById("trModal").classList.add("on");
+    setTimeout(function(){document.getElementById("trInput").focus()},80);
+  });
+}
+function saveTrEdit(){
+  var id=_editingTrId;
+  document.getElementById("trModal").classList.remove("on");
+  if(!id)return;
+  var v=document.getElementById("trInput").value;
+  _editingTrId=null;
+  ensureEntry().then(function(entry){
+    if(!entry.training)entry.training={};
+    if(!entry.training[id])entry.training[id]={};
+    if(v&&v.trim()){
+      entry.training[id].text=v.trim();
+    }else{
+      delete entry.training[id].text;
+    }
+    entry.updatedAt=new Date().toISOString();
+    dbPut(entry).then(function(){
+      pushToFirebase(entry);
+      render();
+      markCalNeedsRefresh();
+      toast(v.trim()?"メモを保存しました":"メモを削除しました");
+    });
+  });
+}
+
 document.getElementById("prev").addEventListener("click",function(){navDay(-1)});
 document.getElementById("next").addEventListener("click",function(){navDay(1)});
 document.getElementById("ddt").addEventListener("click",function(){
@@ -641,6 +703,15 @@ document.getElementById("modal").addEventListener("click",function(e){
   if(e.target===this)this.classList.remove("on");
 });
 
+document.getElementById("trCancel").addEventListener("click",function(){
+  document.getElementById("trModal").classList.remove("on");
+  _editingTrId=null;
+});
+document.getElementById("trOk").addEventListener("click",saveTrEdit);
+document.getElementById("trModal").addEventListener("click",function(e){
+  if(e.target===this){this.classList.remove("on");_editingTrId=null}
+});
+
 document.getElementById("syncSave").addEventListener("click",function(){
   var v=document.getElementById("syncUrlInput").value.trim();
   if(!v){toast("URLを入力してください");return}
@@ -656,6 +727,7 @@ document.getElementById("syncSave").addEventListener("click",function(){
   document.body.addEventListener("touchstart",function(e){
     if(e.touches.length!==1)return;
     if(document.getElementById("modal").classList.contains("on"))return;
+    if(document.getElementById("trModal").classList.contains("on"))return;
     sx=e.touches[0].clientX;
     sy=e.touches[0].clientY;
     active=true;
