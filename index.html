@@ -115,6 +115,7 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-cv-wrap.thin{height:34px;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),rgba(190,170,145,.35) calc(100% - 1px))}
 .tr-row.thin{padding:3px 8px}
 .tr-cv{display:block;width:100%;height:100%;background:transparent;touch-action:none}
+.tr-txt{position:absolute;left:8px;right:8px;top:0;bottom:0;display:flex;align-items:center;font-size:13px;color:var(--text);pointer-events:none;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:767px){.day-cols{flex-direction:column}.day-task,.day-training{width:100%}}
 .dn{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .dnb{padding:10px 18px;border:1px solid var(--bdr);border-radius:8px;background:var(--card);font-size:14px}
@@ -1221,6 +1222,9 @@ function renderDay(){
       var tr=entry.training||{};
       function _trChk(id){return tr[id]&&tr[id].done?" done":""}
       function _trChkSvg(id){return '<svg viewBox="0 0 22 22"><rect x="1" y="1" width="20" height="20"/>'+(tr[id]&&tr[id].done?'<path d="M6 11 L10 15 L16 7"/>':'')+'</svg>'}
+      function _trText(id){return(tr[id]&&tr[id].text)||""}
+      function _trDataAttr(id){var tx=_trText(id);return tx?' data-text="'+esc(tx).replace(/"/g,"&quot;")+'"':''}
+      function _trTxtHtml(id){var tx=_trText(id);return tx?'<div class="tr-txt">'+esc(tx)+'</div>':''}
       h+='<div class="day-training">';
       h+='<div class="tr-panel">';
       h+='<div class="tr-hdr"><span>&#128170; Training</span>';
@@ -1236,10 +1240,10 @@ function renderDay(){
       var bodyParts=[["muscle_legs","脚"],["muscle_chest","胸"],["muscle_shoulder","肩"],["muscle_back","背中"],["muscle_arms","腕"]];
       for(var bi=0;bi<bodyParts.length;bi++){
         var bid=bodyParts[bi][0],blbl=bodyParts[bi][1];
-        h+='<div class="tr-row" data-id="'+bid+'">';
+        h+='<div class="tr-row" data-id="'+bid+'"'+_trDataAttr(bid)+'>';
         h+='<div class="tr-chk'+_trChk(bid)+'" data-id="'+bid+'">'+_trChkSvg(bid)+'</div>';
         h+='<div class="tr-lbl">'+blbl+'</div>';
-        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas></div>';
+        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas>'+_trTxtHtml(bid)+'</div>';
         h+='</div>';
       }
       h+='</div>';
@@ -1249,28 +1253,28 @@ function renderDay(){
       var runFields=[["running_distance","距離"],["running_time","時間"],["running_pace","ペース"]];
       for(var ri=0;ri<runFields.length;ri++){
         var rid=runFields[ri][0],rlbl=runFields[ri][1];
-        h+='<div class="tr-row thin" data-id="'+rid+'">';
+        h+='<div class="tr-row thin" data-id="'+rid+'"'+_trDataAttr(rid)+'>';
         h+='<div class="tr-chk" style="visibility:hidden"></div>';
         h+='<div class="tr-lbl">'+rlbl+'</div>';
-        h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
+        h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas>'+_trTxtHtml(rid)+'</div>';
         h+='</div>';
       }
       h+='</div>';
       /* クロスフィット — parent checkbox + menu field */
       h+='<div class="tr-cat">';
       h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("crossfit")+'" data-id="crossfit">'+_trChkSvg("crossfit")+'</div>クロスフィット</div>';
-      h+='<div class="tr-row" data-id="crossfit_menu">';
+      h+='<div class="tr-row" data-id="crossfit_menu"'+_trDataAttr("crossfit_menu")+'>';
       h+='<div class="tr-chk" style="visibility:hidden"></div>';
       h+='<div class="tr-lbl">メニュー</div>';
-      h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas></div>';
+      h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas>'+_trTxtHtml("crossfit_menu")+'</div>';
       h+='</div>';
       h+='</div>';
       /* その他 — parent checkbox + free content field */
       h+='<div class="tr-cat">';
       h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("other")+'" data-id="other">'+_trChkSvg("other")+'</div>その他</div>';
-      h+='<div class="tr-row" data-id="other_content">';
+      h+='<div class="tr-row" data-id="other_content"'+_trDataAttr("other_content")+'>';
       h+='<div class="tr-chk" style="visibility:hidden"></div>';
-      h+='<div class="tr-cv-wrap" style="margin-left:0"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas></div>';
+      h+='<div class="tr-cv-wrap" style="margin-left:0"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas>'+_trTxtHtml("other_content")+'</div>';
       h+='</div>';
       h+='</div>';
       h+='</div></div></div>';
@@ -2487,6 +2491,20 @@ function triggerSave(){
       if(trChk.classList.contains("done")){
         trainingData[trCid]=trainingData[trCid]||{};
         trainingData[trCid].done=true;
+      }
+    }
+    /* Preserve any text notes attached to training rows (synced from re:action mobile) */
+    var trRows=document.querySelectorAll(".tr-row[data-id]");
+    for(var trR=0;trR<trRows.length;trR++){
+      var trRow=trRows[trR];
+      var trRid=trRow.getAttribute("data-id");
+      var trRtxt=trRow.getAttribute("data-text")||"";
+      if(trRtxt){
+        var trRd=document.createElement("div");trRd.innerHTML=trRtxt;trRtxt=trRd.textContent;
+      }
+      if(trRtxt){
+        trainingData[trRid]=trainingData[trRid]||{};
+        trainingData[trRid].text=trRtxt;
       }
     }
     var trKeys=[];for(var k in trainingData)trKeys.push(k);
