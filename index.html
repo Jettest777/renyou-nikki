@@ -104,18 +104,25 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-cat:last-child{border-bottom:none}
 .tr-cat-h{padding:10px 14px 8px;font-size:13px;font-weight:700;color:var(--text);background:var(--acc-lt);display:flex;align-items:center;gap:8px}
 .tr-cat-h .tr-chk{padding-top:0;width:28px}
-.tr-row{display:flex;align-items:center;padding:6px 8px}
+.tr-row{display:flex;align-items:flex-start;padding:6px 8px;gap:4px}
+/* Align checkbox and label to the vertical center of the canvas row
+   (independent of whether a text block is appended below it). */
+.tr-row .tr-chk{align-self:flex-start;margin-top:20px}
+.tr-row.thin .tr-chk{margin-top:6px}
+.tr-row .tr-lbl{align-self:flex-start;padding-top:22px}
+.tr-row.thin .tr-lbl{padding-top:9px}
 .tr-chk{width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .tr-chk svg{width:20px;height:20px}
 .tr-chk rect{stroke:var(--bdr);stroke-width:1.5;fill:transparent;rx:3}
 .tr-chk.done rect{stroke:var(--acc);fill:var(--acc-lt)}
 .tr-chk.done path{stroke:var(--acc);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .tr-lbl{width:54px;flex-shrink:0;padding:0 4px;font-size:12px;color:var(--sub);font-weight:600}
-.tr-cv-wrap{flex:1;min-width:0;height:64px;position:relative;overflow:hidden;border:1px solid var(--bdr);border-radius:6px;background:#fdfaf6;background-image:repeating-linear-gradient(to bottom,transparent,transparent 28px,rgba(190,170,145,.18) 28px,rgba(190,170,145,.18) 29px);background-position:0 4px}
+.tr-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.tr-cv-wrap{min-width:0;height:64px;position:relative;overflow:hidden;border:1px solid var(--bdr);border-radius:6px;background:#fdfaf6;background-image:repeating-linear-gradient(to bottom,transparent,transparent 28px,rgba(190,170,145,.18) 28px,rgba(190,170,145,.18) 29px);background-position:0 4px}
 .tr-cv-wrap.thin{height:34px;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),rgba(190,170,145,.35) calc(100% - 1px))}
 .tr-row.thin{padding:3px 8px}
 .tr-cv{display:block;width:100%;height:100%;background:transparent;touch-action:none}
-.tr-txt{position:absolute;left:8px;right:8px;top:0;bottom:0;display:flex;align-items:center;font-size:13px;color:var(--text);pointer-events:none;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr-txt{font-size:13px;color:var(--text);padding:6px 10px;background:var(--acc-lt);border-radius:6px;line-height:1.4;word-wrap:break-word;white-space:pre-wrap}
 @media(max-width:767px){.day-cols{flex-direction:column}.day-task,.day-training{width:100%}}
 .dn{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .dnb{padding:10px 18px;border:1px solid var(--bdr);border-radius:8px;background:var(--card);font-size:14px}
@@ -1243,8 +1250,10 @@ function renderDay(){
         h+='<div class="tr-row" data-id="'+bid+'"'+_trDataAttr(bid)+'>';
         h+='<div class="tr-chk'+_trChk(bid)+'" data-id="'+bid+'">'+_trChkSvg(bid)+'</div>';
         h+='<div class="tr-lbl">'+blbl+'</div>';
-        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas>'+_trTxtHtml(bid)+'</div>';
-        h+='</div>';
+        h+='<div class="tr-content">';
+        h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas></div>';
+        h+=_trTxtHtml(bid);
+        h+='</div></div>';
       }
       h+='</div>';
       /* ランニング — parent checkbox + distance/time/pace fields */
@@ -1256,8 +1265,10 @@ function renderDay(){
         h+='<div class="tr-row thin" data-id="'+rid+'"'+_trDataAttr(rid)+'>';
         h+='<div class="tr-chk" style="visibility:hidden"></div>';
         h+='<div class="tr-lbl">'+rlbl+'</div>';
-        h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas>'+_trTxtHtml(rid)+'</div>';
-        h+='</div>';
+        h+='<div class="tr-content">';
+        h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
+        h+=_trTxtHtml(rid);
+        h+='</div></div>';
       }
       h+='</div>';
       /* クロスフィット — parent checkbox + menu field */
@@ -1266,16 +1277,20 @@ function renderDay(){
       h+='<div class="tr-row" data-id="crossfit_menu"'+_trDataAttr("crossfit_menu")+'>';
       h+='<div class="tr-chk" style="visibility:hidden"></div>';
       h+='<div class="tr-lbl">メニュー</div>';
-      h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas>'+_trTxtHtml("crossfit_menu")+'</div>';
-      h+='</div>';
+      h+='<div class="tr-content">';
+      h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas></div>';
+      h+=_trTxtHtml("crossfit_menu");
+      h+='</div></div>';
       h+='</div>';
       /* その他 — parent checkbox + free content field */
       h+='<div class="tr-cat">';
       h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("other")+'" data-id="other">'+_trChkSvg("other")+'</div>その他</div>';
       h+='<div class="tr-row" data-id="other_content"'+_trDataAttr("other_content")+'>';
       h+='<div class="tr-chk" style="visibility:hidden"></div>';
-      h+='<div class="tr-cv-wrap" style="margin-left:0"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas>'+_trTxtHtml("other_content")+'</div>';
-      h+='</div>';
+      h+='<div class="tr-content" style="margin-left:0">';
+      h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas></div>';
+      h+=_trTxtHtml("other_content");
+      h+='</div></div>';
       h+='</div>';
       h+='</div></div></div>';
 
