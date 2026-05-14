@@ -67,6 +67,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
 .tr-edit:active{background:rgba(192,104,64,.08)}
 .tr-txt{font-size:13px;color:var(--text);margin-top:3px;line-height:1.4;word-wrap:break-word;white-space:pre-wrap}
 .tr-add-hint{font-size:11px;color:var(--sub);font-style:italic;opacity:0.55}
+.tk-edit{cursor:pointer;border-radius:6px}
+.tk-edit:active{background:rgba(192,104,64,.06)}
+.tr-media{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tr-media-item{position:relative;width:60px;height:60px;border-radius:6px;overflow:hidden;background:#000;flex-shrink:0;cursor:pointer}
+.tr-media-item img,.tr-media-item video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.tr-media-item .del{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.75);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}
+.tr-media-item .play-icon{position:absolute;top:50%;left:50%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%);width:24px;height:24px;background:rgba(0,0,0,.6);border-radius:50%;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.media-add-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;border:1.5px dashed var(--bdr);border-radius:8px;color:var(--sub);font-size:13px;margin-top:10px;cursor:pointer;background:transparent}
+.media-add-btn:active{background:var(--acc-lt);color:var(--acc);border-color:var(--acc)}
+.media-add-btn input{display:none}
+.tr-media-edit{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.media-viewer{position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;align-items:center;justify-content:center;z-index:3000;cursor:pointer}
+.media-viewer img,.media-viewer video{max-width:100%;max-height:100%;object-fit:contain}
+.media-viewer .close-mv{position:absolute;top:env(safe-area-inset-top,12px);right:12px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;border:none;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .empty{padding:30px 16px;text-align:center;color:var(--sub);font-size:13px}
 .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:flex-end;justify-content:center;z-index:1000}
 .modal.on{display:flex}
@@ -130,8 +144,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
 
 <div class="modal" id="modal">
   <div class="modal-c">
-    <h3>タスクを追加</h3>
+    <h3 id="taskModalTitle">タスクを追加</h3>
     <textarea id="taskInput" placeholder="例：買い物リスト、メールの返信..."></textarea>
+    <div style="font-size:11px;color:var(--sub);margin-top:6px">空欄で保存するとタスクが削除されます</div>
     <div class="modal-btns">
       <button class="cancel" id="cancelBtn">キャンセル</button>
       <button class="ok" id="okBtn">追加</button>
@@ -143,6 +158,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
   <div class="modal-c">
     <h3 id="trModalTitle">トレーニング詳細</h3>
     <textarea id="trInput" placeholder="例：スクワット 5x10、ベンチプレス 60kg..."></textarea>
+    <div id="trMediaList" class="tr-media-edit"></div>
+    <label class="media-add-btn">
+      <input type="file" accept="image/*,video/*" id="trMediaInput" multiple>
+      <span>📷 写真・動画を追加</span>
+    </label>
+    <div style="font-size:11px;color:var(--sub);margin-top:6px">テキストを空欄で保存するとメモが削除されます</div>
     <div class="modal-btns">
       <button class="cancel" id="trCancel">キャンセル</button>
       <button class="ok" id="trOk">保存</button>
@@ -474,10 +495,11 @@ function renderTasks(entry){
     var t=tasks[i];
     h+='<div class="tk-r">';
     h+='<div class="tk-c'+(t.done?" on":"")+'" data-i="'+i+'"></div>';
-    h+='<div class="tk-cn">';
+    var editable=!!t.text||(!t.drawing);
+    h+='<div class="tk-cn '+(editable?"tk-edit":"")+'" data-edit-i="'+i+'">';
     if(t.text)h+='<div class="tk-tx">'+escapeHtml(t.text)+'</div>';
     if(t.drawing)h+='<canvas data-src="'+t.drawing+'"></canvas>';
-    if(!t.text&&!t.drawing)h+='<div class="tk-tx" style="color:var(--sub)">（内容なし）</div>';
+    if(!t.text&&!t.drawing)h+='<div class="tk-tx" style="color:var(--sub)">タップして内容を追加</div>';
     h+='</div></div>';
   }
   list.innerHTML=h;
@@ -485,9 +507,18 @@ function renderTasks(entry){
   for(var c=0;c<cvs.length;c++)renderCropped(cvs[c],cvs[c].getAttribute("data-src"));
   var chks=list.querySelectorAll(".tk-c[data-i]");
   for(var k=0;k<chks.length;k++){
-    chks[k].addEventListener("click",function(){
+    chks[k].addEventListener("click",function(e){
+      e.stopPropagation();
       var idx=parseInt(this.getAttribute("data-i"));
       toggleTask(idx);
+    });
+  }
+  /* Tap on text/empty area opens edit modal (handwriting tasks not editable from mobile) */
+  var edits=list.querySelectorAll(".tk-edit");
+  for(var ee=0;ee<edits.length;ee++){
+    edits[ee].addEventListener("click",function(){
+      var idx=parseInt(this.getAttribute("data-edit-i"));
+      openTaskEdit(idx);
     });
   }
 }
@@ -550,11 +581,23 @@ function renderTraining(entry){
         h+='<div style="width:24px;flex-shrink:0"></div>';
       }
       var editLabel=row.label||item.cat;
+      var mediaArr=data.media||[];
       h+='<div class="tk-cn tr-edit" data-tr-edit="'+row.id+'" data-tr-label="'+escapeHtml(editLabel)+'">';
       if(row.label)h+='<div class="tr-lbl">'+row.label+'</div>';
       if(data.drawing)h+='<canvas data-src="'+data.drawing+'"></canvas>';
       if(data.text)h+='<div class="tr-txt">'+escapeHtml(data.text)+'</div>';
-      if(!data.drawing&&!data.text)h+='<div class="tr-add-hint">タップしてメモを追加</div>';
+      if(mediaArr.length>0){
+        h+='<div class="tr-media">';
+        for(var mi=0;mi<mediaArr.length;mi++){
+          var mm=mediaArr[mi];
+          h+='<div class="tr-media-item" data-view-tr="'+row.id+'" data-view-mi="'+mi+'">';
+          if(mm.type==="image")h+='<img src="'+mm.data+'">';
+          else h+='<video src="'+mm.data+'" preload="metadata"></video><div class="play-icon">▶</div>';
+          h+='</div>';
+        }
+        h+='</div>';
+      }
+      if(!data.drawing&&!data.text&&mediaArr.length===0)h+='<div class="tr-add-hint">タップしてメモや写真を追加</div>';
       h+='</div></div>';
     }
     h+='</div>';
@@ -577,6 +620,19 @@ function renderTraining(entry){
       var id=this.getAttribute("data-tr-edit");
       var lbl=this.getAttribute("data-tr-label")||"";
       openTrEdit(id,lbl);
+    });
+  }
+  /* Media thumbnails: quick view (don't open edit modal) */
+  var mvs=list.querySelectorAll(".tr-media-item[data-view-tr]");
+  for(var mv=0;mv<mvs.length;mv++){
+    mvs[mv].addEventListener("click",function(e){
+      e.stopPropagation();
+      var trId=this.getAttribute("data-view-tr");
+      var mi=parseInt(this.getAttribute("data-view-mi"));
+      ensureEntry().then(function(entry){
+        var m=((entry.training||{})[trId]||{}).media||[];
+        if(m[mi])openMediaViewer(m[mi]);
+      });
     });
   }
 }
@@ -616,38 +672,122 @@ function toggleTraining(id){
   });
 }
 
-function addTextTask(text){
-  if(!text||!text.trim())return;
+/* Task add/edit/delete via single modal — idx=null means adding a new task,
+   number means editing that task. Blank text on edit deletes the task. */
+var _editingTaskIdx=null;
+function openTaskEdit(idx){
+  _editingTaskIdx=(typeof idx==="number")?idx:null;
+  var title=document.getElementById("taskModalTitle");
+  var okBtn=document.getElementById("okBtn");
+  var inp=document.getElementById("taskInput");
+  if(_editingTaskIdx===null){
+    title.textContent="タスクを追加";
+    okBtn.textContent="追加";
+    inp.value="";
+    document.getElementById("modal").classList.add("on");
+    setTimeout(function(){inp.focus()},80);
+  }else{
+    title.textContent="タスクを編集";
+    okBtn.textContent="保存";
+    ensureEntry().then(function(entry){
+      var t=((entry.tasks||[])[_editingTaskIdx])||{};
+      inp.value=t.text||"";
+      document.getElementById("modal").classList.add("on");
+      setTimeout(function(){inp.focus()},80);
+    });
+  }
+}
+function saveTaskEdit(){
+  var v=document.getElementById("taskInput").value;
+  v=v?v.trim():"";
+  var idx=_editingTaskIdx;
+  document.getElementById("modal").classList.remove("on");
+  _editingTaskIdx=null;
   ensureEntry().then(function(entry){
     if(!entry.tasks)entry.tasks=[];
-    entry.tasks.push({done:false,text:text.trim(),drawing:null});
+    if(idx===null){
+      if(!v)return;
+      entry.tasks.push({done:false,text:v,drawing:null});
+    }else{
+      if(!entry.tasks[idx])return;
+      if(!v){
+        /* Blank text — delete this task entirely */
+        entry.tasks.splice(idx,1);
+      }else{
+        entry.tasks[idx].text=v;
+      }
+    }
     entry.updatedAt=new Date().toISOString();
     dbPut(entry).then(function(){
       pushToFirebase(entry);
       render();
       markCalNeedsRefresh();
-      toast("タスクを追加しました");
+      toast(idx===null?"タスクを追加しました":(v?"タスクを更新しました":"タスクを削除しました"));
     });
   });
 }
 
+/* Training detail editor — handles text memo + photo/video media list.
+   Media items live in a working array (_editingTrMedia) so the user can
+   add/remove and cancel without committing. Save writes the working array
+   to entry.training[id].media which then syncs to Firebase and to re:date. */
 var _editingTrId=null;
+var _editingTrMedia=[];
+
 function openTrEdit(id,label){
   _editingTrId=id;
   ensureEntry().then(function(entry){
     var t=((entry.training||{})[id])||{};
     document.getElementById("trModalTitle").textContent=(label||"トレーニング")+"のメモ";
     document.getElementById("trInput").value=t.text||"";
+    _editingTrMedia=(t.media||[]).slice();
+    renderTrMediaEdit();
     document.getElementById("trModal").classList.add("on");
     setTimeout(function(){document.getElementById("trInput").focus()},80);
   });
 }
+
+function renderTrMediaEdit(){
+  var list=document.getElementById("trMediaList");
+  var h="";
+  for(var i=0;i<_editingTrMedia.length;i++){
+    var m=_editingTrMedia[i];
+    h+='<div class="tr-media-item" data-mi="'+i+'">';
+    if(m.type==="image"){
+      h+='<img src="'+m.data+'">';
+    }else{
+      h+='<video src="'+m.data+'" preload="metadata"></video>';
+      h+='<div class="play-icon">▶</div>';
+    }
+    h+='<button class="del" data-del="'+i+'">×</button>';
+    h+='</div>';
+  }
+  list.innerHTML=h;
+  var dels=list.querySelectorAll(".del");
+  for(var d=0;d<dels.length;d++){
+    dels[d].addEventListener("click",function(e){
+      e.stopPropagation();
+      var i=parseInt(this.getAttribute("data-del"));
+      _editingTrMedia.splice(i,1);
+      renderTrMediaEdit();
+    });
+  }
+  var items=list.querySelectorAll(".tr-media-item");
+  for(var ii=0;ii<items.length;ii++){
+    items[ii].addEventListener("click",function(){
+      var i=parseInt(this.getAttribute("data-mi"));
+      openMediaViewer(_editingTrMedia[i]);
+    });
+  }
+}
+
 function saveTrEdit(){
   var id=_editingTrId;
   document.getElementById("trModal").classList.remove("on");
-  if(!id)return;
+  if(!id){_editingTrId=null;_editingTrMedia=[];return}
   var v=document.getElementById("trInput").value;
-  _editingTrId=null;
+  var media=_editingTrMedia.slice();
+  _editingTrId=null;_editingTrMedia=[];
   ensureEntry().then(function(entry){
     if(!entry.training)entry.training={};
     if(!entry.training[id])entry.training[id]={};
@@ -656,14 +796,80 @@ function saveTrEdit(){
     }else{
       delete entry.training[id].text;
     }
+    if(media.length>0){
+      entry.training[id].media=media;
+    }else{
+      delete entry.training[id].media;
+    }
     entry.updatedAt=new Date().toISOString();
     dbPut(entry).then(function(){
       pushToFirebase(entry);
       render();
       markCalNeedsRefresh();
-      toast(v.trim()?"メモを保存しました":"メモを削除しました");
+      toast("保存しました");
     });
   });
+}
+
+/* Compress images client-side so a single entry stays under reasonable
+   Firebase Realtime Database size limits (~10MB per item). */
+function compressImage(file,maxSize,quality){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var w=img.naturalWidth,h=img.naturalHeight;
+        if(w>maxSize||h>maxSize){
+          var r=Math.min(maxSize/w,maxSize/h);
+          w=Math.round(w*r);h=Math.round(h*r);
+        }
+        var cv=document.createElement("canvas");
+        cv.width=w;cv.height=h;
+        cv.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL("image/jpeg",quality));
+      };
+      img.onerror=function(){resolve(null)};
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){resolve(null)};
+    reader.readAsDataURL(file);
+  });
+}
+function readFileAsDataURL(file){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){resolve(e.target.result)};
+    reader.onerror=function(){resolve(null)};
+    reader.readAsDataURL(file);
+  });
+}
+
+function openMediaViewer(m){
+  if(!m||!m.data)return;
+  var ov=document.createElement("div");
+  ov.className="media-viewer";
+  if(m.type==="image"){
+    var img=document.createElement("img");
+    img.src=m.data;
+    ov.appendChild(img);
+  }else{
+    var vid=document.createElement("video");
+    vid.src=m.data;
+    vid.controls=true;
+    vid.autoplay=true;
+    vid.playsInline=true;
+    ov.appendChild(vid);
+  }
+  var x=document.createElement("button");
+  x.className="close-mv";x.textContent="×";
+  ov.appendChild(x);
+  function close(){if(ov.parentNode)ov.parentNode.removeChild(ov)}
+  x.addEventListener("click",close);
+  ov.addEventListener("click",function(e){
+    if(e.target===ov)close();
+  });
+  document.body.appendChild(ov);
 }
 
 document.getElementById("prev").addEventListener("click",function(){navDay(-1)});
@@ -686,30 +892,52 @@ document.getElementById("cnext").addEventListener("click",function(){
 });
 
 document.getElementById("addTask").addEventListener("click",function(){
-  var inp=document.getElementById("taskInput");
-  inp.value="";
-  document.getElementById("modal").classList.add("on");
-  setTimeout(function(){inp.focus()},80);
+  openTaskEdit(null);
 });
 document.getElementById("cancelBtn").addEventListener("click",function(){
   document.getElementById("modal").classList.remove("on");
+  _editingTaskIdx=null;
 });
-document.getElementById("okBtn").addEventListener("click",function(){
-  var v=document.getElementById("taskInput").value;
-  document.getElementById("modal").classList.remove("on");
-  addTextTask(v);
-});
+document.getElementById("okBtn").addEventListener("click",saveTaskEdit);
 document.getElementById("modal").addEventListener("click",function(e){
   if(e.target===this)this.classList.remove("on");
 });
 
 document.getElementById("trCancel").addEventListener("click",function(){
   document.getElementById("trModal").classList.remove("on");
-  _editingTrId=null;
+  _editingTrId=null;_editingTrMedia=[];
 });
 document.getElementById("trOk").addEventListener("click",saveTrEdit);
 document.getElementById("trModal").addEventListener("click",function(e){
-  if(e.target===this){this.classList.remove("on");_editingTrId=null}
+  if(e.target===this){this.classList.remove("on");_editingTrId=null;_editingTrMedia=[]}
+});
+document.getElementById("trMediaInput").addEventListener("change",function(e){
+  var files=e.target.files;
+  if(!files||!files.length)return;
+  var jobs=[];
+  for(var i=0;i<files.length;i++){
+    (function(f){
+      var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
+      if(f.type&&f.type.indexOf("image/")===0){
+        jobs.push(compressImage(f,1920,0.85).then(function(d){
+          if(d)return{type:"image",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
+      }else if(f.type&&f.type.indexOf("video/")===0){
+        if(f.size>30*1024*1024){
+          toast("動画が大きすぎます ("+Math.round(f.size/1024/1024)+"MB)。30MB以下にしてください");
+          return;
+        }
+        jobs.push(readFileAsDataURL(f).then(function(d){
+          if(d)return{type:"video",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
+      }
+    })(files[i]);
+  }
+  Promise.all(jobs).then(function(items){
+    for(var k=0;k<items.length;k++){if(items[k])_editingTrMedia.push(items[k])}
+    renderTrMediaEdit();
+  });
+  this.value="";
 });
 
 document.getElementById("syncSave").addEventListener("click",function(){
