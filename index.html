@@ -118,6 +118,17 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-chk.done path{stroke:var(--acc);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .tr-lbl{width:54px;flex-shrink:0;padding:0 4px;font-size:12px;color:var(--sub);font-weight:600}
 .tr-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.tr-media{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.tr-media-item{position:relative;width:60px;height:60px;border-radius:6px;overflow:hidden;background:#000;flex-shrink:0;cursor:pointer}
+.tr-media-item img,.tr-media-item video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.tr-media-item .del-mv{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.75);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}
+.tr-media-item .play-icon{position:absolute;top:50%;left:50%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%);width:24px;height:24px;background:rgba(0,0,0,.55);border-radius:50%;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.tr-media-add{display:flex;align-items:center;justify-content:center;width:60px;height:60px;border:1.5px dashed var(--bdr);border-radius:6px;color:var(--sub);font-size:11px;flex-shrink:0;cursor:pointer;text-align:center;line-height:1.2;background:transparent}
+.tr-media-add:active{background:var(--acc-lt);color:var(--acc);border-color:var(--acc)}
+.tr-media-add input{display:none}
+.media-viewer{position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;align-items:center;justify-content:center;z-index:3000;cursor:pointer}
+.media-viewer img,.media-viewer video{max-width:100%;max-height:100%;object-fit:contain}
+.media-viewer .close-mv{position:absolute;top:16px;right:16px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .tr-cv-wrap{min-width:0;height:64px;position:relative;overflow:hidden;border:1px solid var(--bdr);border-radius:6px;background:#fdfaf6;background-image:repeating-linear-gradient(to bottom,transparent,transparent 28px,rgba(190,170,145,.18) 28px,rgba(190,170,145,.18) 29px);background-position:0 4px}
 .tr-cv-wrap.thin{height:34px;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),rgba(190,170,145,.35) calc(100% - 1px))}
 .tr-row.thin{padding:3px 8px}
@@ -1232,6 +1243,21 @@ function renderDay(){
       function _trText(id){return(tr[id]&&tr[id].text)||""}
       function _trDataAttr(id){var tx=_trText(id);return tx?' data-text="'+esc(tx).replace(/"/g,"&quot;")+'"':''}
       function _trTxtHtml(id){var tx=_trText(id);return tx?'<div class="tr-txt">'+esc(tx)+'</div>':''}
+      function _trMediaHtml(id){
+        var md=(tr[id]&&tr[id].media)||[];
+        var hh='<div class="tr-media" data-tr-id="'+id+'">';
+        for(var mi=0;mi<md.length;mi++){
+          var m=md[mi];
+          hh+='<div class="tr-media-item" data-tr="'+id+'" data-mi="'+mi+'">';
+          if(m.type==="image")hh+='<img src="'+m.data+'">';
+          else hh+='<video src="'+m.data+'" preload="metadata"></video><div class="play-icon">▶</div>';
+          hh+='<button class="del-mv tap" data-del-tr="'+id+'" data-del-mi="'+mi+'">×</button>';
+          hh+='</div>';
+        }
+        hh+='<label class="tr-media-add"><input type="file" accept="image/*,video/*" data-add-tr="'+id+'" multiple>+ 写真<br>動画</label>';
+        hh+='</div>';
+        return hh;
+      }
       h+='<div class="day-training">';
       h+='<div class="tr-panel">';
       h+='<div class="tr-hdr"><span>&#128170; Training</span>';
@@ -1253,6 +1279,7 @@ function renderDay(){
         h+='<div class="tr-content">';
         h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas></div>';
         h+=_trTxtHtml(bid);
+        h+=_trMediaHtml(bid);
         h+='</div></div>';
       }
       h+='</div>';
@@ -1268,6 +1295,7 @@ function renderDay(){
         h+='<div class="tr-content">';
         h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
         h+=_trTxtHtml(rid);
+        h+=_trMediaHtml(rid);
         h+='</div></div>';
       }
       h+='</div>';
@@ -1280,6 +1308,7 @@ function renderDay(){
       h+='<div class="tr-content">';
       h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas></div>';
       h+=_trTxtHtml("crossfit_menu");
+      h+=_trMediaHtml("crossfit_menu");
       h+='</div></div>';
       h+='</div>';
       /* その他 — parent checkbox + free content field */
@@ -1290,6 +1319,7 @@ function renderDay(){
       h+='<div class="tr-content" style="margin-left:0">';
       h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas></div>';
       h+=_trTxtHtml("other_content");
+      h+=_trMediaHtml("other_content");
       h+='</div></div>';
       h+='</div>';
       h+='</div></div></div>';
@@ -1450,6 +1480,7 @@ function renderDay(){
       /* Auto-crop each past handwriting canvas to its actual content */
       var piList=document.querySelectorAll("canvas.pi[data-src]");
       for(var pic=0;pic<piList.length;pic++)_cropPiCanvas(piList[pic]);
+      bindTrainingMedia();
       var savedDims=entry.drawingW&&entry.drawingH?{w:entry.drawingW,h:entry.drawingH}:null;
       bindDayEvents(entry.drawing||null,savedDims);
     });
@@ -2447,6 +2478,9 @@ function triggerSave(){
   if(svTm)clearTimeout(svTm);
   svTm=setTimeout(function(){
     var ds=fmt(sel);
+    /* Fetch existing entry to merge in fields that aren't reflected in
+       the DOM (training media especially — photos / videos). */
+    dbGet(ds).then(function(existingEntry){
     var slp=document.getElementById("slp");
     var sleep=slp?parseFloat(slp.value)||null:null;
     var drawData=null;
@@ -2522,6 +2556,17 @@ function triggerSave(){
         trainingData[trRid].text=trRtxt;
       }
     }
+    /* Merge in media (photos / videos) from the existing entry — these
+       aren't represented in the DOM but must survive a save. */
+    if(existingEntry&&existingEntry.training){
+      for(var ek in existingEntry.training){
+        var em=existingEntry.training[ek];
+        if(em&&em.media&&em.media.length>0){
+          trainingData[ek]=trainingData[ek]||{};
+          trainingData[ek].media=em.media;
+        }
+      }
+    }
     var trKeys=[];for(var k in trainingData)trKeys.push(k);
 
     if(!drawData&&!sleep&&taskData.length===0&&trKeys.length===0)return;
@@ -2556,6 +2601,7 @@ function triggerSave(){
     dbPut(entry).then(function(){
       toast("保存しました");
       pushToFirebase(entry);
+    });
     });
   },800);
 }
@@ -2731,6 +2777,150 @@ function pushToFirebase(entry){
     _skipRemoteIds[entry.id]=true;
     _fbRef.child(entry.id).set(entry);
   }catch(ex){}
+}
+
+/* ============================
+   Training media (photo / video) — compress and inline-store
+   ============================ */
+function _compressImage(file,maxSize,quality){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var w=img.naturalWidth,h=img.naturalHeight;
+        if(w>maxSize||h>maxSize){
+          var r=Math.min(maxSize/w,maxSize/h);
+          w=Math.round(w*r);h=Math.round(h*r);
+        }
+        var cv=document.createElement("canvas");
+        cv.width=w;cv.height=h;
+        cv.getContext("2d").drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL("image/jpeg",quality));
+      };
+      img.onerror=function(){resolve(null)};
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){resolve(null)};
+    reader.readAsDataURL(file);
+  });
+}
+function _readFileAsDataURL(file){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){resolve(e.target.result)};
+    reader.onerror=function(){resolve(null)};
+    reader.readAsDataURL(file);
+  });
+}
+function _trainingMediaUpload(trId,files){
+  if(!files||!files.length)return;
+  var jobs=[];
+  for(var i=0;i<files.length;i++){
+    (function(f){
+      var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
+      if(f.type&&f.type.indexOf("image/")===0){
+        jobs.push(_compressImage(f,1920,0.85).then(function(d){
+          if(d)return{type:"image",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
+      }else if(f.type&&f.type.indexOf("video/")===0){
+        if(f.size>30*1024*1024){
+          toast("動画が大きすぎます ("+Math.round(f.size/1024/1024)+"MB)。30MB以下にしてください");
+          return;
+        }
+        jobs.push(_readFileAsDataURL(f).then(function(d){
+          if(d)return{type:"video",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
+      }
+    })(files[i]);
+  }
+  Promise.all(jobs).then(function(items){
+    var added=[];
+    for(var k=0;k<items.length;k++){if(items[k])added.push(items[k])}
+    if(added.length===0)return;
+    var ds=fmt(sel);
+    dbGet(ds).then(function(entry){
+      entry=entry||{id:ds,date:ds,monthDay:gmd(sel),yearMonth:ds.substring(0,7),_v:DATA_VERSION};
+      if(!entry.training)entry.training={};
+      if(!entry.training[trId])entry.training[trId]={};
+      if(!entry.training[trId].media)entry.training[trId].media=[];
+      for(var a=0;a<added.length;a++)entry.training[trId].media.push(added[a]);
+      entry.updatedAt=new Date().toISOString();
+      dbPut(entry).then(function(){
+        pushToFirebase(entry);
+        renderDay();
+        toast(added.length+"件追加しました");
+      });
+    });
+  });
+}
+function _trainingMediaDelete(trId,mi){
+  if(!confirm("削除しますか？"))return;
+  var ds=fmt(sel);
+  dbGet(ds).then(function(entry){
+    if(!entry||!entry.training||!entry.training[trId]||!entry.training[trId].media)return;
+    entry.training[trId].media.splice(mi,1);
+    if(entry.training[trId].media.length===0)delete entry.training[trId].media;
+    entry.updatedAt=new Date().toISOString();
+    dbPut(entry).then(function(){
+      pushToFirebase(entry);
+      renderDay();
+    });
+  });
+}
+function _openMediaViewer(m){
+  if(!m||!m.data)return;
+  var ov=document.createElement("div");
+  ov.className="media-viewer";
+  if(m.type==="image"){
+    var img=document.createElement("img");img.src=m.data;ov.appendChild(img);
+  }else{
+    var vid=document.createElement("video");
+    vid.src=m.data;vid.controls=true;vid.autoplay=true;vid.playsInline=true;
+    ov.appendChild(vid);
+  }
+  var x=document.createElement("button");
+  x.className="close-mv";x.textContent="×";
+  ov.appendChild(x);
+  function close(){if(ov.parentNode)ov.parentNode.removeChild(ov)}
+  x.addEventListener("click",close);
+  ov.addEventListener("click",function(e){if(e.target===ov)close()});
+  document.body.appendChild(ov);
+}
+function bindTrainingMedia(){
+  /* File input — upload */
+  var inputs=document.querySelectorAll(".tr-media-add input[data-add-tr]");
+  for(var i=0;i<inputs.length;i++){
+    inputs[i].addEventListener("change",function(e){
+      var trId=this.getAttribute("data-add-tr");
+      _trainingMediaUpload(trId,e.target.files);
+      this.value="";
+    });
+  }
+  /* Delete button */
+  var dels=document.querySelectorAll(".del-mv[data-del-tr]");
+  for(var d=0;d<dels.length;d++){
+    dels[d].addEventListener("click",function(e){
+      e.stopPropagation();e.preventDefault();
+      var trId=this.getAttribute("data-del-tr");
+      var mi=parseInt(this.getAttribute("data-del-mi"));
+      _trainingMediaDelete(trId,mi);
+    });
+  }
+  /* Thumbnail click — open viewer */
+  var views=document.querySelectorAll(".tr-media-item[data-tr][data-mi]");
+  for(var v=0;v<views.length;v++){
+    views[v].addEventListener("click",function(e){
+      if(e.target&&e.target.classList&&e.target.classList.contains("del-mv"))return;
+      var trId=this.getAttribute("data-tr");
+      var mi=parseInt(this.getAttribute("data-mi"));
+      var ds=fmt(sel);
+      dbGet(ds).then(function(entry){
+        var m=((entry&&entry.training||{})[trId]||{}).media||[];
+        if(m[mi])_openMediaViewer(m[mi]);
+      });
+    });
+  }
 }
 
 // REST fallback for when SDK isn't available
