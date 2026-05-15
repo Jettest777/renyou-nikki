@@ -2494,14 +2494,25 @@ function triggerSave(){
     var slp=document.getElementById("slp");
     var sleep=slp?parseFloat(slp.value)||null:null;
     var drawData=null;
+    var drawDataReadable=false; /* whether we could reliably inspect curCv */
 
-    if(curCv){
+    /* CRITICAL: only read drawData from curCv if the canvas has finished
+       loading its preimage. Reading too early returns an empty canvas and
+       would overwrite a previously-saved drawing with null. */
+    if(curCv&&curCv.imgReady!==false){
       try{
         var id=curCv.ctx.getImageData(0,0,curCv.canvas.width,curCv.canvas.height);
         var has=false;
         for(var i=3;i<id.data.length;i+=4){if(id.data[i]>0){has=true;break}}
         if(has)drawData=curCv.canvas.toDataURL("image/png");
+        drawDataReadable=true;
       }catch(e){}
+    }
+    /* If we couldn't safely inspect the live canvas, fall back to whatever
+       is already persisted so unrelated saves (sleep / tasks / training)
+       don't wipe an existing drawing. */
+    if(!drawDataReadable&&existingEntry&&existingEntry.drawing){
+      drawData=existingEntry.drawing;
     }
     var taskData=[];
     var tkRows=document.querySelectorAll(".tk-row");
@@ -2585,7 +2596,13 @@ function triggerSave(){
        at the EXACT same size — this lets _blitSaved take the no-smoothing
        1:1 path and prevents reload-time blur. */
     var drawingW=null,drawingH=null;
-    if(drawData&&curCv){drawingW=curCv.canvas.width;drawingH=curCv.canvas.height}
+    if(drawData&&curCv&&drawDataReadable){drawingW=curCv.canvas.width;drawingH=curCv.canvas.height}
+    /* If we're preserving the existing drawing (drawData came from
+       existingEntry), keep its original dimensions too. */
+    if(drawData&&!drawingW&&existingEntry){
+      drawingW=existingEntry.drawingW||null;
+      drawingH=existingEntry.drawingH||null;
+    }
 
     /* Persist the high-resolution fullscreen snapshot so reopening
        fullscreen after an app reload restores at the original quality. */
@@ -2596,6 +2613,13 @@ function triggerSave(){
         drawingHiW=_fullCvSnapshot.width;
         drawingHiH=_fullCvSnapshot.height;
       }catch(snapErr){}
+    }
+    /* If no fresh hi-res snapshot, fall back to existing one so we don't
+       wipe the previously-saved high-res copy on an unrelated save. */
+    if(!drawingHi&&existingEntry&&existingEntry.drawingHi){
+      drawingHi=existingEntry.drawingHi;
+      drawingHiW=existingEntry.drawingHiW||null;
+      drawingHiH=existingEntry.drawingHiH||null;
     }
 
     var entry={
