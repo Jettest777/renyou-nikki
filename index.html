@@ -105,11 +105,14 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-cat-h{padding:10px 14px 8px;font-size:13px;font-weight:700;color:var(--text);background:var(--acc-lt);display:flex;align-items:center;gap:8px}
 .tr-cat-h .tr-chk{padding-top:0;width:28px}
 .tr-row{display:flex;align-items:flex-start;padding:6px 8px;gap:4px}
-/* Align checkbox and label to the vertical center of the canvas row
-   (independent of whether a text block is appended below it). */
-.tr-row .tr-chk{align-self:flex-start;margin-top:20px}
-.tr-row.thin .tr-chk{margin-top:6px}
-.tr-row .tr-lbl{align-self:flex-start;padding-top:22px}
+.tr-row .tr-chk{margin-top:4px;flex-shrink:0}
+.tr-row.thin .tr-chk{margin-top:4px}
+/* Side column for non-thin rows holds the body-part label and a compact
+   media grid directly under it — shares vertical space with the canvas
+   on the right so the overall row stays short. */
+.tr-side{flex-shrink:0;width:74px;display:flex;flex-direction:column;gap:4px;padding-top:4px}
+.tr-side .tr-lbl{padding:0;width:auto;text-align:left}
+/* Thin rows (running fields) keep the original inline label layout */
 .tr-row.thin .tr-lbl{padding-top:9px}
 .tr-chk{width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer}
 .tr-chk svg{width:20px;height:20px}
@@ -118,12 +121,12 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .tr-chk.done path{stroke:var(--acc);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .tr-lbl{width:54px;flex-shrink:0;padding:0 4px;font-size:12px;color:var(--sub);font-weight:600}
 .tr-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
-.tr-media{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
-.tr-media-item{position:relative;width:60px;height:60px;border-radius:6px;overflow:hidden;background:#000;flex-shrink:0;cursor:pointer}
+.tr-media{display:flex;flex-wrap:wrap;gap:3px;align-content:flex-start;margin-top:2px}
+.tr-media-item{position:relative;width:32px;height:32px;border-radius:4px;overflow:hidden;background:#000;flex-shrink:0;cursor:pointer}
 .tr-media-item img,.tr-media-item video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
-.tr-media-item .del-mv{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.75);color:#fff;border:none;font-size:11px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2}
-.tr-media-item .play-icon{position:absolute;top:50%;left:50%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%);width:24px;height:24px;background:rgba(0,0,0,.55);border-radius:50%;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;pointer-events:none}
-.tr-media-add{display:flex;align-items:center;justify-content:center;width:60px;height:60px;border:1.5px dashed var(--bdr);border-radius:6px;color:var(--sub);font-size:11px;flex-shrink:0;cursor:pointer;text-align:center;line-height:1.2;background:transparent}
+.tr-media-item .del-mv{position:absolute;top:1px;right:1px;width:14px;height:14px;border-radius:50%;background:rgba(0,0,0,.8);color:#fff;border:none;font-size:9px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;z-index:2;font-weight:700}
+.tr-media-item .play-icon{position:absolute;top:50%;left:50%;-webkit-transform:translate(-50%,-50%);transform:translate(-50%,-50%);width:14px;height:14px;background:rgba(0,0,0,.55);border-radius:50%;color:#fff;font-size:8px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.tr-media-add{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:1.5px dashed var(--bdr);border-radius:4px;color:var(--sub);font-size:14px;line-height:1;flex-shrink:0;cursor:pointer;background:transparent}
 .tr-media-add:active{background:var(--acc-lt);color:var(--acc);border-color:var(--acc)}
 .tr-media-add input{display:none}
 .media-viewer{position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;align-items:center;justify-content:center;z-index:3000;cursor:pointer}
@@ -1248,13 +1251,14 @@ function renderDay(){
         var hh='<div class="tr-media" data-tr-id="'+id+'">';
         for(var mi=0;mi<md.length;mi++){
           var m=md[mi];
+          var src=(m.url||m.data||"");
           hh+='<div class="tr-media-item" data-tr="'+id+'" data-mi="'+mi+'">';
-          if(m.type==="image")hh+='<img src="'+m.data+'">';
-          else hh+='<video src="'+m.data+'" preload="metadata"></video><div class="play-icon">▶</div>';
+          if(m.type==="image")hh+='<img src="'+src+'">';
+          else hh+='<video src="'+src+'" preload="metadata"></video><div class="play-icon">▶</div>';
           hh+='<button class="del-mv tap" data-del-tr="'+id+'" data-del-mi="'+mi+'">×</button>';
           hh+='</div>';
         }
-        hh+='<label class="tr-media-add"><input type="file" accept="image/*,video/*" data-add-tr="'+id+'" multiple>+ 写真<br>動画</label>';
+        hh+='<label class="tr-media-add"><input type="file" accept="image/*,video/*" data-add-tr="'+id+'" multiple>+</label>';
         hh+='</div>';
         return hh;
       }
@@ -1275,11 +1279,13 @@ function renderDay(){
         var bid=bodyParts[bi][0],blbl=bodyParts[bi][1];
         h+='<div class="tr-row" data-id="'+bid+'"'+_trDataAttr(bid)+'>';
         h+='<div class="tr-chk'+_trChk(bid)+'" data-id="'+bid+'">'+_trChkSvg(bid)+'</div>';
+        h+='<div class="tr-side">';
         h+='<div class="tr-lbl">'+blbl+'</div>';
+        h+=_trMediaHtml(bid);
+        h+='</div>';
         h+='<div class="tr-content">';
         h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-'+bid+'" data-id="'+bid+'"></canvas></div>';
         h+=_trTxtHtml(bid);
-        h+=_trMediaHtml(bid);
         h+='</div></div>';
       }
       h+='</div>';
@@ -1295,7 +1301,6 @@ function renderDay(){
         h+='<div class="tr-content">';
         h+='<div class="tr-cv-wrap thin"><canvas class="tr-cv" id="tr-cv-'+rid+'" data-id="'+rid+'"></canvas></div>';
         h+=_trTxtHtml(rid);
-        h+=_trMediaHtml(rid);
         h+='</div></div>';
       }
       h+='</div>';
@@ -1304,11 +1309,13 @@ function renderDay(){
       h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("crossfit")+'" data-id="crossfit">'+_trChkSvg("crossfit")+'</div>クロスフィット</div>';
       h+='<div class="tr-row" data-id="crossfit_menu"'+_trDataAttr("crossfit_menu")+'>';
       h+='<div class="tr-chk" style="visibility:hidden"></div>';
+      h+='<div class="tr-side">';
       h+='<div class="tr-lbl">メニュー</div>';
+      h+=_trMediaHtml("crossfit_menu");
+      h+='</div>';
       h+='<div class="tr-content">';
       h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-crossfit_menu" data-id="crossfit_menu"></canvas></div>';
       h+=_trTxtHtml("crossfit_menu");
-      h+=_trMediaHtml("crossfit_menu");
       h+='</div></div>';
       h+='</div>';
       /* その他 — parent checkbox + free content field */
@@ -1316,10 +1323,13 @@ function renderDay(){
       h+='<div class="tr-cat-h"><div class="tr-chk'+_trChk("other")+'" data-id="other">'+_trChkSvg("other")+'</div>その他</div>';
       h+='<div class="tr-row" data-id="other_content"'+_trDataAttr("other_content")+'>';
       h+='<div class="tr-chk" style="visibility:hidden"></div>';
-      h+='<div class="tr-content" style="margin-left:0">';
+      h+='<div class="tr-side">';
+      h+='<div class="tr-lbl" style="font-size:11px;color:var(--sub)">写真/動画</div>';
+      h+=_trMediaHtml("other_content");
+      h+='</div>';
+      h+='<div class="tr-content">';
       h+='<div class="tr-cv-wrap"><canvas class="tr-cv" id="tr-cv-other_content" data-id="other_content"></canvas></div>';
       h+=_trTxtHtml("other_content");
-      h+=_trMediaHtml("other_content");
       h+='</div></div>';
       h+='</div>';
       h+='</div></div></div>';
@@ -2612,7 +2622,7 @@ function triggerSave(){
 var SYNC_URL="";
 try{SYNC_URL=localStorage.getItem("rn_sync_url")||""}catch(e){}
 
-var _fbApp=null,_fbDb=null,_fbRef=null,_fbListening=false;
+var _fbApp=null,_fbDb=null,_fbRef=null,_fbStorage=null,_fbListening=false;
 var _fbReady=false,_fbSyncing=false;
 var _skipRemoteIds={};
 
@@ -2624,18 +2634,36 @@ function setSyncUI(state,msg){
 }
 
 function loadFirebaseSDK(cb){
-  if(typeof firebase!=="undefined"&&firebase.database){cb(true);return}
+  if(typeof firebase!=="undefined"&&firebase.database&&firebase.storage){cb(true);return}
   var s1=document.createElement("script");
   s1.src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js";
   s1.onload=function(){
     var s2=document.createElement("script");
     s2.src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js";
-    s2.onload=function(){cb(true)};
+    s2.onload=function(){
+      var s3=document.createElement("script");
+      s3.src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js";
+      s3.onload=function(){cb(true)};
+      s3.onerror=function(){cb(true)}; /* storage optional — still allow database-only */
+      document.head.appendChild(s3);
+    };
     s2.onerror=function(){cb(false)};
     document.head.appendChild(s2);
   };
   s1.onerror=function(){cb(false)};
   document.head.appendChild(s1);
+}
+
+/* Derive the Firebase Storage bucket name from the Realtime Database URL.
+   Examples:
+     https://renyou-nikki-default-rtdb.firebaseio.com → renyou-nikki.appspot.com
+     https://my-app.firebaseio.com                    → my-app.appspot.com */
+function _deriveStorageBucket(dbUrl){
+  if(!dbUrl)return null;
+  var host=dbUrl.replace(/^https?:\/\//,"").split("/")[0];
+  var first=host.split(".")[0];
+  first=first.replace(/-default-rtdb$/,"");
+  return first?first+".appspot.com":null;
 }
 
 function initFirebase(){
@@ -2647,10 +2675,14 @@ function initFirebase(){
     }
     try{
       if(!_fbApp){
-        _fbApp=firebase.initializeApp({databaseURL:SYNC_URL});
+        var cfg={databaseURL:SYNC_URL};
+        var bucket=_deriveStorageBucket(SYNC_URL);
+        if(bucket)cfg.storageBucket=bucket;
+        _fbApp=firebase.initializeApp(cfg);
       }
       _fbDb=firebase.database();
       _fbRef=_fbDb.ref("diary");
+      try{if(firebase.storage)_fbStorage=firebase.storage()}catch(stErr){_fbStorage=null}
       _fbReady=true;
 
       // Monitor connection state
@@ -2780,9 +2812,16 @@ function pushToFirebase(entry){
 }
 
 /* ============================
-   Training media (photo / video) — compress and inline-store
+   Training media (photo / video) — Firebase Storage backed
+   ---------------------------------------------------------
+   Photos are compressed client-side (max 1920px, JPEG 85%) then
+   uploaded as Blobs to Firebase Storage. Videos are uploaded as-is
+   (unlimited size, only Storage quota applies). Each media item in the
+   entry stores { url, path, type, id, addedAt }, not the binary itself,
+   so Realtime Database stays small and sync remains fast.
    ============================ */
-function _compressImage(file,maxSize,quality){
+function _mediaSrc(m){return m&&(m.url||m.data)||""}
+function _compressImageToBlob(file,maxSize,quality){
   return new Promise(function(resolve){
     var reader=new FileReader();
     reader.onload=function(e){
@@ -2796,7 +2835,7 @@ function _compressImage(file,maxSize,quality){
         var cv=document.createElement("canvas");
         cv.width=w;cv.height=h;
         cv.getContext("2d").drawImage(img,0,0,w,h);
-        resolve(cv.toDataURL("image/jpeg",quality));
+        cv.toBlob(function(blob){resolve(blob)},"image/jpeg",quality);
       };
       img.onerror=function(){resolve(null)};
       img.src=e.target.result;
@@ -2805,40 +2844,57 @@ function _compressImage(file,maxSize,quality){
     reader.readAsDataURL(file);
   });
 }
-function _readFileAsDataURL(file){
-  return new Promise(function(resolve){
-    var reader=new FileReader();
-    reader.onload=function(e){resolve(e.target.result)};
-    reader.onerror=function(){resolve(null)};
-    reader.readAsDataURL(file);
+function _uploadToStorage(entryId,blob,type,origName){
+  return new Promise(function(resolve,reject){
+    if(!_fbStorage){reject(new Error("Storage not initialized"));return}
+    var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
+    var ext;
+    if(type==="image")ext="jpg";
+    else{
+      var mime=blob.type||"video/mp4";
+      ext=mime.split("/")[1]||"mp4";
+      if(ext.indexOf(";")>=0)ext=ext.split(";")[0];
+    }
+    var path="media/"+entryId+"/"+uid+"."+ext;
+    var ref=_fbStorage.ref().child(path);
+    var task=ref.put(blob);
+    task.on("state_changed",
+      function(snap){
+        var pct=Math.round((snap.bytesTransferred/Math.max(1,snap.totalBytes))*100);
+        var label=type==="image"?"写真":"動画";
+        toast(label+"アップロード中 "+pct+"%");
+      },
+      function(err){reject(err)},
+      function(){
+        ref.getDownloadURL().then(function(url){
+          resolve({type:type,url:url,path:path,id:uid,addedAt:new Date().toISOString()});
+        }).catch(reject);
+      }
+    );
   });
 }
 function _trainingMediaUpload(trId,files){
   if(!files||!files.length)return;
+  if(!_fbStorage){toast("Firebase Storageが利用できません。Firebaseコンソールで有効化してください");return}
+  var ds=fmt(sel);
   var jobs=[];
   for(var i=0;i<files.length;i++){
     (function(f){
-      var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
       if(f.type&&f.type.indexOf("image/")===0){
-        jobs.push(_compressImage(f,1920,0.85).then(function(d){
-          if(d)return{type:"image",data:d,id:uid,addedAt:new Date().toISOString()};
-        }));
+        jobs.push(
+          _compressImageToBlob(f,1920,0.85)
+            .then(function(blob){return blob?_uploadToStorage(ds,blob,"image",f.name):null})
+        );
       }else if(f.type&&f.type.indexOf("video/")===0){
-        if(f.size>30*1024*1024){
-          toast("動画が大きすぎます ("+Math.round(f.size/1024/1024)+"MB)。30MB以下にしてください");
-          return;
-        }
-        jobs.push(_readFileAsDataURL(f).then(function(d){
-          if(d)return{type:"video",data:d,id:uid,addedAt:new Date().toISOString()};
-        }));
+        /* No client-side size limit — Firebase Storage handles GB-sized uploads */
+        jobs.push(_uploadToStorage(ds,f,"video",f.name));
       }
     })(files[i]);
   }
-  Promise.all(jobs).then(function(items){
+  Promise.all(jobs.map(function(j){return j.catch(function(){return null})})).then(function(items){
     var added=[];
     for(var k=0;k<items.length;k++){if(items[k])added.push(items[k])}
-    if(added.length===0)return;
-    var ds=fmt(sel);
+    if(added.length===0){toast("アップロードに失敗しました");return}
     dbGet(ds).then(function(entry){
       entry=entry||{id:ds,date:ds,monthDay:gmd(sel),yearMonth:ds.substring(0,7),_v:DATA_VERSION};
       if(!entry.training)entry.training={};
@@ -2859,8 +2915,15 @@ function _trainingMediaDelete(trId,mi){
   var ds=fmt(sel);
   dbGet(ds).then(function(entry){
     if(!entry||!entry.training||!entry.training[trId]||!entry.training[trId].media)return;
-    entry.training[trId].media.splice(mi,1);
-    if(entry.training[trId].media.length===0)delete entry.training[trId].media;
+    var arr=entry.training[trId].media;
+    var m=arr[mi];
+    if(!m)return;
+    /* Best-effort delete from Storage (legacy inline items have no path) */
+    if(m.path&&_fbStorage){
+      try{_fbStorage.ref().child(m.path).delete().catch(function(){})}catch(e){}
+    }
+    arr.splice(mi,1);
+    if(arr.length===0)delete entry.training[trId].media;
     entry.updatedAt=new Date().toISOString();
     dbPut(entry).then(function(){
       pushToFirebase(entry);
@@ -2869,14 +2932,15 @@ function _trainingMediaDelete(trId,mi){
   });
 }
 function _openMediaViewer(m){
-  if(!m||!m.data)return;
+  var src=_mediaSrc(m);
+  if(!src)return;
   var ov=document.createElement("div");
   ov.className="media-viewer";
   if(m.type==="image"){
-    var img=document.createElement("img");img.src=m.data;ov.appendChild(img);
+    var img=document.createElement("img");img.src=src;ov.appendChild(img);
   }else{
     var vid=document.createElement("video");
-    vid.src=m.data;vid.controls=true;vid.autoplay=true;vid.playsInline=true;
+    vid.src=src;vid.controls=true;vid.autoplay=true;vid.playsInline=true;
     ov.appendChild(vid);
   }
   var x=document.createElement("button");
