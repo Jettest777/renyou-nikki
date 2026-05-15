@@ -276,7 +276,15 @@ function renderCropped(canvas,dataUrl){
 
 var SYNC_URL="";
 try{SYNC_URL=localStorage.getItem("rn_sync_url")||""}catch(e){}
-var _fbApp,_fbDb,_fbRef,_fbReady=false,_skipRemoteIds={};
+var _fbApp,_fbDb,_fbRef,_fbStorage=null,_fbReady=false,_skipRemoteIds={};
+
+function _deriveStorageBucket(dbUrl){
+  if(!dbUrl)return null;
+  var host=dbUrl.replace(/^https?:\/\//,"").split("/")[0];
+  var first=host.split(".")[0];
+  first=first.replace(/-default-rtdb$/,"");
+  return first?first+".appspot.com":null;
+}
 
 function setSync(s,t){
   var dot=document.getElementById("sdot");
@@ -287,13 +295,19 @@ function setSync(s,t){
 }
 
 function loadFirebaseSDK(cb){
-  if(typeof firebase!=="undefined"&&firebase.database){cb(true);return}
+  if(typeof firebase!=="undefined"&&firebase.database&&firebase.storage){cb(true);return}
   var s1=document.createElement("script");
   s1.src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js";
   s1.onload=function(){
     var s2=document.createElement("script");
     s2.src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js";
-    s2.onload=function(){cb(true)};
+    s2.onload=function(){
+      var s3=document.createElement("script");
+      s3.src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js";
+      s3.onload=function(){cb(true)};
+      s3.onerror=function(){cb(true)};
+      document.head.appendChild(s3);
+    };
     s2.onerror=function(){cb(false)};
     document.head.appendChild(s2);
   };
@@ -310,9 +324,13 @@ function initFirebase(){
   loadFirebaseSDK(function(ok){
     if(!ok){setSync("err","SDK読込失敗");return}
     try{
-      _fbApp=firebase.initializeApp({databaseURL:SYNC_URL});
+      var cfg={databaseURL:SYNC_URL};
+      var bucket=_deriveStorageBucket(SYNC_URL);
+      if(bucket)cfg.storageBucket=bucket;
+      _fbApp=firebase.initializeApp(cfg);
       _fbDb=firebase.database();
       _fbRef=_fbDb.ref("diary");
+      try{if(firebase.storage)_fbStorage=firebase.storage()}catch(stErr){_fbStorage=null}
       _fbReady=true;
       _fbDb.ref(".info/connected").on("value",function(snap){
         if(snap.val()===true){setSync("ok","同期中");doFullSync()}
@@ -590,9 +608,10 @@ function renderTraining(entry){
         h+='<div class="tr-media">';
         for(var mi=0;mi<mediaArr.length;mi++){
           var mm=mediaArr[mi];
+          var mmSrc=mm.url||mm.data||"";
           h+='<div class="tr-media-item" data-view-tr="'+row.id+'" data-view-mi="'+mi+'">';
-          if(mm.type==="image")h+='<img src="'+mm.data+'">';
-          else h+='<video src="'+mm.data+'" preload="metadata"></video><div class="play-icon">▶</div>';
+          if(mm.type==="image")h+='<img src="'+mmSrc+'">';
+          else h+='<video src="'+mmSrc+'" preload="metadata"></video><div class="play-icon">▶</div>';
           h+='</div>';
         }
         h+='</div>';
@@ -733,6 +752,9 @@ function saveTaskEdit(){
    to entry.training[id].media which then syncs to Firebase and to re:date. */
 var _editingTrId=null;
 var _editingTrMedia=[];
+/* Track Storage paths the user removed in this modal session; only
+   actually delete from Storage when they tap 保存 (so Cancel stays clean). */
+var _editingTrMediaToDelete=[];
 
 function openTrEdit(id,label){
   _editingTrId=id;
@@ -740,7 +762,12 @@ function openTrEdit(id,label){
     var t=((entry.training||{})[id])||{};
     document.getElementById("trModalTitle").textContent=(label||"トレーニング")+"のメモ";
     document.getElementById("trInput").value=t.text||"";
-    _editingTrMedia=(t.media||[]).slice();
+    var arr=(t.media||[]).slice();
+    /* Clear any leftover session flag from a prior modal — items from
+       the saved entry should be treated as "pre-existing". */
+    for(var i=0;i<arr.length;i++){delete arr[i]._session}
+    _editingTrMedia=arr;
+    _editingTrMediaToDelete=[];
     renderTrMediaEdit();
     document.getElementById("trModal").classList.add("on");
     setTimeout(function(){document.getElementById("trInput").focus()},80);
@@ -752,11 +779,12 @@ function renderTrMediaEdit(){
   var h="";
   for(var i=0;i<_editingTrMedia.length;i++){
     var m=_editingTrMedia[i];
+    var src=m.url||m.data||"";
     h+='<div class="tr-media-item" data-mi="'+i+'">';
     if(m.type==="image"){
-      h+='<img src="'+m.data+'">';
+      h+='<img src="'+src+'">';
     }else{
-      h+='<video src="'+m.data+'" preload="metadata"></video>';
+      h+='<video src="'+src+'" preload="metadata"></video>';
       h+='<div class="play-icon">▶</div>';
     }
     h+='<button class="del" data-del="'+i+'">×</button>';
@@ -768,6 +796,16 @@ function renderTrMediaEdit(){
     dels[d].addEventListener("click",function(e){
       e.stopPropagation();
       var i=parseInt(this.getAttribute("data-del"));
+      var m=_editingTrMedia[i];
+      if(m){
+        if(m._session){
+          /* Newly uploaded in this session — delete from Storage immediately */
+          if(m.path&&_fbStorage){try{_fbStorage.ref().child(m.path).delete().catch(function(){})}catch(e){}}
+        }else if(m.path){
+          /* Pre-existing — defer Storage deletion until user taps Save */
+          _editingTrMediaToDelete.push(m.path);
+        }
+      }
       _editingTrMedia.splice(i,1);
       renderTrMediaEdit();
     });
@@ -784,10 +822,18 @@ function renderTrMediaEdit(){
 function saveTrEdit(){
   var id=_editingTrId;
   document.getElementById("trModal").classList.remove("on");
-  if(!id){_editingTrId=null;_editingTrMedia=[];return}
+  if(!id){_editingTrId=null;_editingTrMedia=[];_editingTrMediaToDelete=[];return}
   var v=document.getElementById("trInput").value;
-  var media=_editingTrMedia.slice();
-  _editingTrId=null;_editingTrMedia=[];
+  /* Strip the _session marker before saving — it's only useful within the modal */
+  var media=_editingTrMedia.map(function(m){
+    var c={};for(var k in m){if(k!=="_session"&&k!=="data")c[k]=m[k]}
+    /* Drop legacy inline data once a Storage URL is present so the entry
+       stays small for Realtime DB sync. */
+    if(!c.url&&m.data)c.data=m.data;
+    return c;
+  });
+  var toDel=_editingTrMediaToDelete.slice();
+  _editingTrId=null;_editingTrMedia=[];_editingTrMediaToDelete=[];
   ensureEntry().then(function(entry){
     if(!entry.training)entry.training={};
     if(!entry.training[id])entry.training[id]={};
@@ -804,6 +850,12 @@ function saveTrEdit(){
     entry.updatedAt=new Date().toISOString();
     dbPut(entry).then(function(){
       pushToFirebase(entry);
+      /* Now safe to permanently remove deleted items from Storage */
+      if(_fbStorage){
+        for(var di=0;di<toDel.length;di++){
+          try{_fbStorage.ref().child(toDel[di]).delete().catch(function(){})}catch(e){}
+        }
+      }
       render();
       markCalNeedsRefresh();
       toast("保存しました");
@@ -811,9 +863,9 @@ function saveTrEdit(){
   });
 }
 
-/* Compress images client-side so a single entry stays under reasonable
-   Firebase Realtime Database size limits (~10MB per item). */
-function compressImage(file,maxSize,quality){
+/* Compress images to a Blob (smaller than data URL) for upload to
+   Firebase Storage. Videos go up as the raw File without compression. */
+function compressImageToBlob(file,maxSize,quality){
   return new Promise(function(resolve){
     var reader=new FileReader();
     reader.onload=function(e){
@@ -827,7 +879,7 @@ function compressImage(file,maxSize,quality){
         var cv=document.createElement("canvas");
         cv.width=w;cv.height=h;
         cv.getContext("2d").drawImage(img,0,0,w,h);
-        resolve(cv.toDataURL("image/jpeg",quality));
+        cv.toBlob(function(blob){resolve(blob)},"image/jpeg",quality);
       };
       img.onerror=function(){resolve(null)};
       img.src=e.target.result;
@@ -836,26 +888,47 @@ function compressImage(file,maxSize,quality){
     reader.readAsDataURL(file);
   });
 }
-function readFileAsDataURL(file){
-  return new Promise(function(resolve){
-    var reader=new FileReader();
-    reader.onload=function(e){resolve(e.target.result)};
-    reader.onerror=function(){resolve(null)};
-    reader.readAsDataURL(file);
+function uploadBlobToStorage(entryId,blob,type){
+  return new Promise(function(resolve,reject){
+    if(!_fbStorage){reject(new Error("Storage not initialized"));return}
+    var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
+    var ext;
+    if(type==="image")ext="jpg";
+    else{
+      var mime=blob.type||"video/mp4";
+      ext=(mime.split("/")[1]||"mp4").split(";")[0];
+    }
+    var path="media/"+entryId+"/"+uid+"."+ext;
+    var ref=_fbStorage.ref().child(path);
+    var task=ref.put(blob);
+    task.on("state_changed",
+      function(snap){
+        var pct=Math.round((snap.bytesTransferred/Math.max(1,snap.totalBytes))*100);
+        var label=type==="image"?"写真":"動画";
+        toast(label+"アップロード中 "+pct+"%");
+      },
+      function(err){reject(err)},
+      function(){
+        ref.getDownloadURL().then(function(url){
+          resolve({type:type,url:url,path:path,id:uid,addedAt:new Date().toISOString(),_session:true});
+        }).catch(reject);
+      }
+    );
   });
 }
 
 function openMediaViewer(m){
-  if(!m||!m.data)return;
+  var src=m&&(m.url||m.data);
+  if(!src)return;
   var ov=document.createElement("div");
   ov.className="media-viewer";
   if(m.type==="image"){
     var img=document.createElement("img");
-    img.src=m.data;
+    img.src=src;
     ov.appendChild(img);
   }else{
     var vid=document.createElement("video");
-    vid.src=m.data;
+    vid.src=src;
     vid.controls=true;
     vid.autoplay=true;
     vid.playsInline=true;
@@ -903,39 +976,52 @@ document.getElementById("modal").addEventListener("click",function(e){
   if(e.target===this)this.classList.remove("on");
 });
 
-document.getElementById("trCancel").addEventListener("click",function(){
+function cancelTrEdit(){
   document.getElementById("trModal").classList.remove("on");
-  _editingTrId=null;_editingTrMedia=[];
-});
+  /* Clean up files uploaded during this modal session — user cancelled */
+  if(_fbStorage){
+    for(var i=0;i<_editingTrMedia.length;i++){
+      var m=_editingTrMedia[i];
+      if(m._session&&m.path){try{_fbStorage.ref().child(m.path).delete().catch(function(){})}catch(e){}}
+    }
+  }
+  _editingTrId=null;_editingTrMedia=[];_editingTrMediaToDelete=[];
+}
+document.getElementById("trCancel").addEventListener("click",cancelTrEdit);
 document.getElementById("trOk").addEventListener("click",saveTrEdit);
 document.getElementById("trModal").addEventListener("click",function(e){
-  if(e.target===this){this.classList.remove("on");_editingTrId=null;_editingTrMedia=[]}
+  if(e.target===this)cancelTrEdit();
 });
 document.getElementById("trMediaInput").addEventListener("change",function(e){
   var files=e.target.files;
-  if(!files||!files.length)return;
+  if(!files||!files.length){this.value="";return}
+  if(!_fbStorage){
+    toast("Firebase Storageが利用できません。同期URL設定を確認してください");
+    this.value="";
+    return;
+  }
+  var ds=fmt(sel);
   var jobs=[];
   for(var i=0;i<files.length;i++){
     (function(f){
-      var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
       if(f.type&&f.type.indexOf("image/")===0){
-        jobs.push(compressImage(f,1920,0.85).then(function(d){
-          if(d)return{type:"image",data:d,id:uid,addedAt:new Date().toISOString()};
-        }));
+        jobs.push(
+          compressImageToBlob(f,1920,0.85)
+            .then(function(blob){return blob?uploadBlobToStorage(ds,blob,"image"):null})
+        );
       }else if(f.type&&f.type.indexOf("video/")===0){
-        if(f.size>30*1024*1024){
-          toast("動画が大きすぎます ("+Math.round(f.size/1024/1024)+"MB)。30MB以下にしてください");
-          return;
-        }
-        jobs.push(readFileAsDataURL(f).then(function(d){
-          if(d)return{type:"video",data:d,id:uid,addedAt:new Date().toISOString()};
-        }));
+        /* No size limit — Firebase Storage handles GB-sized videos */
+        jobs.push(uploadBlobToStorage(ds,f,"video"));
       }
     })(files[i]);
   }
-  Promise.all(jobs).then(function(items){
-    for(var k=0;k<items.length;k++){if(items[k])_editingTrMedia.push(items[k])}
-    renderTrMediaEdit();
+  Promise.all(jobs.map(function(j){return j.catch(function(){return null})})).then(function(items){
+    var any=false;
+    for(var k=0;k<items.length;k++){
+      if(items[k]){_editingTrMedia.push(items[k]);any=true}
+    }
+    if(any){renderTrMediaEdit();toast("アップロード完了")}
+    else toast("アップロードに失敗しました");
   });
   this.value="";
 });
