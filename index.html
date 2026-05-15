@@ -133,7 +133,7 @@ input[type="number"]{-webkit-appearance:none;appearance:none}
 .media-viewer img,.media-viewer video{max-width:100%;max-height:100%;object-fit:contain}
 .media-viewer .close-mv{position:absolute;top:16px;right:16px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;border:none;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .tr-cv-wrap{min-width:0;height:64px;position:relative;overflow:hidden;border:1px solid var(--bdr);border-radius:6px;background:#fdfaf6;background-image:repeating-linear-gradient(to bottom,transparent,transparent 28px,rgba(190,170,145,.18) 28px,rgba(190,170,145,.18) 29px);background-position:0 4px}
-.tr-cv-wrap.thin{height:34px;background-image:linear-gradient(to bottom,transparent calc(100% - 1px),rgba(190,170,145,.35) calc(100% - 1px))}
+.tr-cv-wrap.thin{height:34px}
 .tr-row.thin{padding:3px 8px}
 .tr-cv{display:block;width:100%;height:100%;background:transparent;touch-action:none}
 .tr-txt{font-size:13px;color:var(--text);padding:6px 10px;background:var(--acc-lt);border-radius:6px;line-height:1.4;word-wrap:break-word;white-space:pre-wrap}
@@ -2812,16 +2812,15 @@ function pushToFirebase(entry){
 }
 
 /* ============================
-   Training media (photo / video) — Firebase Storage backed
-   ---------------------------------------------------------
-   Photos are compressed client-side (max 1920px, JPEG 85%) then
-   uploaded as Blobs to Firebase Storage. Videos are uploaded as-is
-   (unlimited size, only Storage quota applies). Each media item in the
-   entry stores { url, path, type, id, addedAt }, not the binary itself,
-   so Realtime Database stays small and sync remains fast.
+   Training media (photo / video) — inline base64 in entry
+   --------------------------------------------------------
+   Photos compressed to max 1920px / JPEG 85%, videos up to 30MB raw.
+   Stored directly inside entry.training[id].media so sync goes through
+   Realtime Database with no extra Storage cost. Display also falls back
+   to .url (legacy items uploaded to Firebase Storage in a prior version).
    ============================ */
 function _mediaSrc(m){return m&&(m.url||m.data)||""}
-function _compressImageToBlob(file,maxSize,quality){
+function _compressImage(file,maxSize,quality){
   return new Promise(function(resolve){
     var reader=new FileReader();
     reader.onload=function(e){
@@ -2835,7 +2834,7 @@ function _compressImageToBlob(file,maxSize,quality){
         var cv=document.createElement("canvas");
         cv.width=w;cv.height=h;
         cv.getContext("2d").drawImage(img,0,0,w,h);
-        cv.toBlob(function(blob){resolve(blob)},"image/jpeg",quality);
+        resolve(cv.toDataURL("image/jpeg",quality));
       };
       img.onerror=function(){resolve(null)};
       img.src=e.target.result;
@@ -2844,57 +2843,40 @@ function _compressImageToBlob(file,maxSize,quality){
     reader.readAsDataURL(file);
   });
 }
-function _uploadToStorage(entryId,blob,type,origName){
-  return new Promise(function(resolve,reject){
-    if(!_fbStorage){reject(new Error("Storage not initialized"));return}
-    var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
-    var ext;
-    if(type==="image")ext="jpg";
-    else{
-      var mime=blob.type||"video/mp4";
-      ext=mime.split("/")[1]||"mp4";
-      if(ext.indexOf(";")>=0)ext=ext.split(";")[0];
-    }
-    var path="media/"+entryId+"/"+uid+"."+ext;
-    var ref=_fbStorage.ref().child(path);
-    var task=ref.put(blob);
-    task.on("state_changed",
-      function(snap){
-        var pct=Math.round((snap.bytesTransferred/Math.max(1,snap.totalBytes))*100);
-        var label=type==="image"?"写真":"動画";
-        toast(label+"アップロード中 "+pct+"%");
-      },
-      function(err){reject(err)},
-      function(){
-        ref.getDownloadURL().then(function(url){
-          resolve({type:type,url:url,path:path,id:uid,addedAt:new Date().toISOString()});
-        }).catch(reject);
-      }
-    );
+function _readFileAsDataURL(file){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){resolve(e.target.result)};
+    reader.onerror=function(){resolve(null)};
+    reader.readAsDataURL(file);
   });
 }
 function _trainingMediaUpload(trId,files){
   if(!files||!files.length)return;
-  if(!_fbStorage){toast("Firebase Storageが利用できません。Firebaseコンソールで有効化してください");return}
-  var ds=fmt(sel);
   var jobs=[];
   for(var i=0;i<files.length;i++){
     (function(f){
+      var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
       if(f.type&&f.type.indexOf("image/")===0){
-        jobs.push(
-          _compressImageToBlob(f,1920,0.85)
-            .then(function(blob){return blob?_uploadToStorage(ds,blob,"image",f.name):null})
-        );
+        jobs.push(_compressImage(f,1920,0.85).then(function(d){
+          if(d)return{type:"image",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
       }else if(f.type&&f.type.indexOf("video/")===0){
-        /* No client-side size limit — Firebase Storage handles GB-sized uploads */
-        jobs.push(_uploadToStorage(ds,f,"video",f.name));
+        if(f.size>30*1024*1024){
+          toast("動画が大きすぎます ("+Math.round(f.size/1024/1024)+"MB)。30MB以下にしてください");
+          return;
+        }
+        jobs.push(_readFileAsDataURL(f).then(function(d){
+          if(d)return{type:"video",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
       }
     })(files[i]);
   }
-  Promise.all(jobs.map(function(j){return j.catch(function(){return null})})).then(function(items){
+  Promise.all(jobs).then(function(items){
     var added=[];
     for(var k=0;k<items.length;k++){if(items[k])added.push(items[k])}
-    if(added.length===0){toast("アップロードに失敗しました");return}
+    if(added.length===0)return;
+    var ds=fmt(sel);
     dbGet(ds).then(function(entry){
       entry=entry||{id:ds,date:ds,monthDay:gmd(sel),yearMonth:ds.substring(0,7),_v:DATA_VERSION};
       if(!entry.training)entry.training={};
