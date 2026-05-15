@@ -863,9 +863,10 @@ function saveTrEdit(){
   });
 }
 
-/* Compress images to a Blob (smaller than data URL) for upload to
-   Firebase Storage. Videos go up as the raw File without compression. */
-function compressImageToBlob(file,maxSize,quality){
+/* Photos compressed to max 1920px / JPEG 85% then stored inline as a
+   data URL in the entry. Videos up to 30MB raw. No Firebase Storage —
+   keeps usage on the free Realtime Database tier. */
+function compressImage(file,maxSize,quality){
   return new Promise(function(resolve){
     var reader=new FileReader();
     reader.onload=function(e){
@@ -879,7 +880,7 @@ function compressImageToBlob(file,maxSize,quality){
         var cv=document.createElement("canvas");
         cv.width=w;cv.height=h;
         cv.getContext("2d").drawImage(img,0,0,w,h);
-        cv.toBlob(function(blob){resolve(blob)},"image/jpeg",quality);
+        resolve(cv.toDataURL("image/jpeg",quality));
       };
       img.onerror=function(){resolve(null)};
       img.src=e.target.result;
@@ -888,32 +889,12 @@ function compressImageToBlob(file,maxSize,quality){
     reader.readAsDataURL(file);
   });
 }
-function uploadBlobToStorage(entryId,blob,type){
-  return new Promise(function(resolve,reject){
-    if(!_fbStorage){reject(new Error("Storage not initialized"));return}
-    var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
-    var ext;
-    if(type==="image")ext="jpg";
-    else{
-      var mime=blob.type||"video/mp4";
-      ext=(mime.split("/")[1]||"mp4").split(";")[0];
-    }
-    var path="media/"+entryId+"/"+uid+"."+ext;
-    var ref=_fbStorage.ref().child(path);
-    var task=ref.put(blob);
-    task.on("state_changed",
-      function(snap){
-        var pct=Math.round((snap.bytesTransferred/Math.max(1,snap.totalBytes))*100);
-        var label=type==="image"?"写真":"動画";
-        toast(label+"アップロード中 "+pct+"%");
-      },
-      function(err){reject(err)},
-      function(){
-        ref.getDownloadURL().then(function(url){
-          resolve({type:type,url:url,path:path,id:uid,addedAt:new Date().toISOString(),_session:true});
-        }).catch(reject);
-      }
-    );
+function readFileAsDataURL(file){
+  return new Promise(function(resolve){
+    var reader=new FileReader();
+    reader.onload=function(e){resolve(e.target.result)};
+    reader.onerror=function(){resolve(null)};
+    reader.readAsDataURL(file);
   });
 }
 
@@ -995,33 +976,28 @@ document.getElementById("trModal").addEventListener("click",function(e){
 document.getElementById("trMediaInput").addEventListener("change",function(e){
   var files=e.target.files;
   if(!files||!files.length){this.value="";return}
-  if(!_fbStorage){
-    toast("Firebase Storageが利用できません。同期URL設定を確認してください");
-    this.value="";
-    return;
-  }
-  var ds=fmt(sel);
   var jobs=[];
   for(var i=0;i<files.length;i++){
     (function(f){
+      var uid="m_"+Date.now()+"_"+Math.random().toString(36).substring(2,8);
       if(f.type&&f.type.indexOf("image/")===0){
-        jobs.push(
-          compressImageToBlob(f,1920,0.85)
-            .then(function(blob){return blob?uploadBlobToStorage(ds,blob,"image"):null})
-        );
+        jobs.push(compressImage(f,1920,0.85).then(function(d){
+          if(d)return{type:"image",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
       }else if(f.type&&f.type.indexOf("video/")===0){
-        /* No size limit — Firebase Storage handles GB-sized videos */
-        jobs.push(uploadBlobToStorage(ds,f,"video"));
+        if(f.size>30*1024*1024){
+          toast("動画が大きすぎます ("+Math.round(f.size/1024/1024)+"MB)。30MB以下にしてください");
+          return;
+        }
+        jobs.push(readFileAsDataURL(f).then(function(d){
+          if(d)return{type:"video",data:d,id:uid,addedAt:new Date().toISOString()};
+        }));
       }
     })(files[i]);
   }
-  Promise.all(jobs.map(function(j){return j.catch(function(){return null})})).then(function(items){
-    var any=false;
-    for(var k=0;k<items.length;k++){
-      if(items[k]){_editingTrMedia.push(items[k]);any=true}
-    }
-    if(any){renderTrMediaEdit();toast("アップロード完了")}
-    else toast("アップロードに失敗しました");
+  Promise.all(jobs).then(function(items){
+    for(var k=0;k<items.length;k++){if(items[k])_editingTrMedia.push(items[k])}
+    renderTrMediaEdit();
   });
   this.value="";
 });
