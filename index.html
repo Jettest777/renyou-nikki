@@ -1505,14 +1505,15 @@ function renderDay(){
       for(var pic=0;pic<piList.length;pic++)_cropPiCanvas(piList[pic]);
       bindTrainingMedia();
       var savedDims=entry.drawingW&&entry.drawingH?{w:entry.drawingW,h:entry.drawingH}:null;
-      bindDayEvents(entry.drawing||null,savedDims);
+      var hiResDims=entry.drawingHiW&&entry.drawingHiH?{w:entry.drawingHiW,h:entry.drawingHiH}:null;
+      bindDayEvents(entry.drawing||null,savedDims,entry.drawingHi||null,hiResDims);
     });
   }).catch(function(){
     wrap.innerHTML='<p style="padding:20px;color:var(--sub)">日記を読み込めませんでした。ページを再読み込みしてください。</p>';
   });
 }
 
-function bindDayEvents(existingImg,savedDims){
+function bindDayEvents(existingImg,savedDims,hiResImg,hiResDims){
   onTap(document.getElementById("btn-pd"),function(){navDay(-1)});
   onTap(document.getElementById("btn-nd"),function(){navDay(1)});
 
@@ -1530,20 +1531,35 @@ function bindDayEvents(existingImg,savedDims){
   onTap(document.getElementById("zr-i"),function(){if(curCv)resetZoom(curCv)});
 
   /* Preload the saved drawing BEFORE creating the canvas so the user can
-     draw immediately on day open and undo/redo capture is correct. */
-  function _setupCanvas(preimg){
+     draw immediately on day open and undo/redo capture is correct.
+     We also preload the hi-res snapshot in parallel so makeCanvas can
+     downscale FROM the highest-fidelity source available — this is what
+     keeps past days looking sharp even when the inline canvas dimensions
+     differ from when the drawing was originally captured. */
+  function _setupCanvas(preimg,hiImg){
     setTimeout(function(){
-      curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",preimg,420,savedDims);
+      curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",preimg,420,savedDims,hiImg,hiResDims);
       initTaskPanel();
     },80);
   }
+  function _loadHiThen(preimg,cb){
+    if(!hiResImg){cb(preimg,null);return}
+    var hi=new Image();
+    var done=false;
+    hi.onload=function(){if(done)return;done=true;cb(preimg,hi)};
+    hi.onerror=function(){if(done)return;done=true;cb(preimg,null)};
+    hi.src=hiResImg;
+    /* Don't block canvas creation forever if hi-res is huge — fall back
+       after 600ms so the user can start drawing immediately. */
+    setTimeout(function(){if(done)return;done=true;cb(preimg,null)},600);
+  }
   if(existingImg){
     var preimg=new Image();
-    preimg.onload=function(){_setupCanvas(preimg)};
-    preimg.onerror=function(){_setupCanvas(null)};
+    preimg.onload=function(){_loadHiThen(preimg,_setupCanvas)};
+    preimg.onerror=function(){_loadHiThen(null,_setupCanvas)};
     preimg.src=existingImg;
   }else{
-    _setupCanvas(null);
+    _setupCanvas(null,null);
   }
   /* Initialize training panel canvases (small, no preload race) */
   setTimeout(function(){initTrainingPanel()},80);
@@ -2016,7 +2032,7 @@ function navDay(d){
 /* ============================
    Canvas engine
    ============================ */
-function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
+function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,hiResImg,hiResDims){
   var cv=document.getElementById(cvId);
   var box=document.getElementById(boxId);
   var ercEl=document.getElementById(ercId);
@@ -2024,6 +2040,11 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   var zrEl=document.getElementById(zrId);
   var scrEl=document.getElementById(scrId);
   if(!cv||!box)return null;
+
+  /* Drop stale invalidators from previous renders — they're closures over
+     now-detached canvases and only waste cycles. The main-diary canvas is
+     a singleton, so on a re-render only one entry should ever be live. */
+  if(cvId==="dcv"&&window._cvRectInvalidators){window._cvRectInvalidators.length=0}
 
   var ctx=cv.getContext("2d",{desynchronized:true})||cv.getContext("2d");
   var rect=box.getBoundingClientRect();
@@ -2033,20 +2054,20 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   cv.style.width=w+"px";
   cv.style.height=h+"px";
 
-  /* Use saved backing dimensions if available so reload becomes a 1:1
-     lossless restore. Without this, sub-pixel layout differences between
-     sessions cause drawImage to apply bilinear smoothing, which slowly
-     blurs the saved drawing on every reload. */
-  var bbW,bbH,useDpr;
-  if(savedDims&&savedDims.w&&savedDims.h){
-    bbW=savedDims.w;
-    bbH=savedDims.h;
-    useDpr=bbW/w;
-  }else{
-    bbW=Math.round(w*devDpr);
-    bbH=Math.round(h*devDpr);
-    useDpr=devDpr;
-  }
+  /* CRITICAL: backing buffer is ALWAYS sized to the current device's pixel
+     ratio. Older versions tried to reuse the saved entry's backing dimensions
+     to get a "1:1 lossless" reload, but that approach computed
+       useDpr = savedBackingWidth / currentCssWidth
+     which silently broke whenever the CSS width changed between sessions
+     (resize, orientation change, opening a past day on a different device).
+     The broken useDpr meant ctx logical coordinates no longer matched CSS
+     pixels, so pen input drifted away from the cursor and rendering looked
+     soft. We now decouple persistence from the live coordinate system:
+     the canvas always uses devDpr, and a separate high-quality blit handles
+     restoring the previously-saved drawing at the best possible fidelity. */
+  var bbW=Math.round(w*devDpr);
+  var bbH=Math.round(h*devDpr);
+  var useDpr=devDpr;
   cv.width=bbW;
   cv.height=bbH;
   ctx.scale(useDpr,useDpr);
@@ -2062,10 +2083,16 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
     imgReady:true /* preloaded by bindDayEvents before this point */
   };
 
-  /* Pixel-perfect blit of the saved drawing onto the backing buffer.
-     A few-pixel rounding tolerance is allowed because flexbox layout
-     can yield sub-pixel-different widths between sessions; treat those
-     as a 1:1 match (no smoothing) so line quality is preserved. */
+  /* High-quality blit of the saved drawing onto the backing buffer.
+     Strategy (highest fidelity first):
+       1. If the saved image's native size matches our current backing
+          buffer within a 2-pixel tolerance, draw 1:1 with smoothing off —
+          this is the sharpest possible path.
+       2. Otherwise, when a high-resolution copy is available (drawingHi),
+          downscale that to the backing buffer using high-quality bilinear.
+          drawingHi is captured at fullscreen resolution so this stays sharp
+          even when downscaling significantly.
+       3. Fallback: high-quality bilinear from the inline-resolution image. */
   function _blitSaved(img){
     if(!img)return;
     ctx.save();
@@ -2074,10 +2101,14 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
     ctx.globalAlpha=1;
     var dw=Math.abs(img.naturalWidth-cv.width);
     var dh=Math.abs(img.naturalHeight-cv.height);
-    if(dw<=4&&dh<=4){
-      /* Treat near-identical sizes as 1:1 — sharp, no interpolation */
+    if(dw<=2&&dh<=2){
       ctx.imageSmoothingEnabled=false;
       ctx.drawImage(img,0,0);
+    }else if(hiResImg&&hiResImg.complete&&hiResImg.naturalWidth>0){
+      /* Use the persisted high-res snapshot — preserves the most detail */
+      ctx.imageSmoothingEnabled=true;
+      try{ctx.imageSmoothingQuality="high"}catch(e){}
+      ctx.drawImage(hiResImg,0,0,cv.width,cv.height);
     }else{
       ctx.imageSmoothingEnabled=true;
       try{ctx.imageSmoothingQuality="high"}catch(e){}
@@ -2110,11 +2141,21 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   var cvRectCache=null;
   function _cvRect(){return cvRectCache||(cvRectCache=cv.getBoundingClientRect())}
   function _invalidateCvRect(){cvRectCache=null}
-  /* Refresh the cached rect whenever layout could have shifted (scroll,
-     resize, orientation change). A stale rect is the primary cause of
-     "pen position drifts from finger/pencil tip" reports. */
-  window.addEventListener("scroll",_invalidateCvRect,{passive:true,capture:true});
-  window.addEventListener("resize",_invalidateCvRect,{passive:true});
+  /* Register the cache-invalidator with the global registry so a single
+     window-level scroll/resize listener forwards to every live canvas.
+     This avoids leaking duplicate listeners every time renderDay rebuilds. */
+  if(window._cvRectInvalidators){
+    window._cvRectInvalidators.push(_invalidateCvRect);
+  }else{
+    window._cvRectInvalidators=[_invalidateCvRect];
+    var _fanout=function(){
+      var arr=window._cvRectInvalidators;
+      for(var ii=0;ii<arr.length;ii++){try{arr[ii]()}catch(e){}}
+    };
+    window.addEventListener("scroll",_fanout,{passive:true,capture:true});
+    window.addEventListener("resize",_fanout,{passive:true});
+    window.addEventListener("orientationchange",_fanout,{passive:true});
+  }
 
   function toCV(tx,ty){
     var r=_cvRect();
@@ -2311,33 +2352,37 @@ function openFull(){
     fcv.style.width=w+"px";
     fcv.style.height=h+"px";
 
-    /* Match the canvas backing buffer to the available snapshot so the
-       restore is a 1:1 lossless copy regardless of body-size changes
-       between sessions. Without this, varying body dimensions would
-       force a re-upscale and degrade the cached quality. */
-    var dpr;
-    if(_fullCvSnapshot){
-      fcv.width=_fullCvSnapshot.width;
-      fcv.height=_fullCvSnapshot.height;
-      dpr=fcv.width/w;
-    }else{
-      fcv.width=Math.round(w*devDpr);
-      fcv.height=Math.round(h*devDpr);
-      dpr=devDpr;
-    }
+    /* CRITICAL: backing buffer is always sized to the CURRENT device's
+       pixel ratio. Earlier versions matched it to the saved snapshot's
+       backing size — but when the device or viewport changed between
+       sessions, that broke the (logical px == CSS px) invariant and
+       caused both pen drift and a visible quality mismatch between old
+       and new strokes. The persisted snapshot is now drawn via a
+       high-quality scale into the live backing buffer instead. */
+    var dpr=devDpr;
+    fcv.width=Math.round(w*devDpr);
+    fcv.height=Math.round(h*devDpr);
     var ctx=fcv.getContext("2d",{desynchronized:true})||fcv.getContext("2d");
     ctx.scale(dpr,dpr);
     fcv.style.transformOrigin="0 0";
 
-    /* Restore the fullscreen view from a session-cached or persisted
-       snapshot if available; otherwise upscale from the inline canvas
-       (which is the only available source). The snapshot prevents
-       quality from degrading on repeated open/close cycles. */
+    /* Restore the fullscreen view. Prefer the in-session snapshot
+       (sharpest available pixels). If snapshot size matches the new
+       backing exactly, draw 1:1 with smoothing off. Otherwise use
+       high-quality bilinear so quality stays acceptable. */
     if(_fullCvSnapshot){
       ctx.save();
       ctx.setTransform(1,0,0,1,0,0);
-      ctx.imageSmoothingEnabled=false;
-      ctx.drawImage(_fullCvSnapshot,0,0);
+      var sw=Math.abs(_fullCvSnapshot.width-fcv.width);
+      var sh=Math.abs(_fullCvSnapshot.height-fcv.height);
+      if(sw<=2&&sh<=2){
+        ctx.imageSmoothingEnabled=false;
+        ctx.drawImage(_fullCvSnapshot,0,0);
+      }else{
+        ctx.imageSmoothingEnabled=true;
+        try{ctx.imageSmoothingQuality="high"}catch(e){}
+        ctx.drawImage(_fullCvSnapshot,0,0,fcv.width,fcv.height);
+      }
       ctx.restore();
     }else if(curCv){
       ctx.imageSmoothingEnabled=true;
