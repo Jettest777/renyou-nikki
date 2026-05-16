@@ -790,22 +790,35 @@ var scrubActive=false;
 
 function addScrubPt(sx,sy){
   // Screen coords + sampled detection for 120Hz iPad input
+  // Tuned to avoid false positives on small Japanese characters like "ね", "の", "あ"
+  // which involve multiple small reversals within a tight area.
   var t=Date.now();
   scrubMoves.push({x:sx,y:sy,t:t});
-  while(scrubMoves.length>0&&t-scrubMoves[0].t>800)scrubMoves.shift();
-  if(scrubMoves.length<10)return false;
+  while(scrubMoves.length>0&&t-scrubMoves[0].t>700)scrubMoves.shift();
+  if(scrubMoves.length<14)return false;
   // Sample every N points so deltas are large enough at high frequency
   var n=scrubMoves.length,step=Math.max(1,Math.floor(n/8)),pts=[];
   for(var i=0;i<n;i+=step)pts.push(scrubMoves[i]);
-  if(pts.length<3)return false;
+  if(pts.length<4)return false;
+  // Require a sufficiently wide stroke envelope — characters stay small,
+  // erase scrubs sweep across a wider area.
+  var minX=pts[0].x,maxX=pts[0].x,minY=pts[0].y,maxY=pts[0].y;
+  for(var bi=1;bi<pts.length;bi++){
+    if(pts[bi].x<minX)minX=pts[bi].x;
+    if(pts[bi].x>maxX)maxX=pts[bi].x;
+    if(pts[bi].y<minY)minY=pts[bi].y;
+    if(pts[bi].y>maxY)maxY=pts[bi].y;
+  }
+  var spanX=maxX-minX,spanY=maxY-minY;
+  if(spanX<40&&spanY<40)return false; // too small — likely a character
   var rev=0;
   for(var j=2;j<pts.length;j++){
     var dx1=pts[j-1].x-pts[j-2].x,dx2=pts[j].x-pts[j-1].x;
     var dy1=pts[j-1].y-pts[j-2].y,dy2=pts[j].y-pts[j-1].y;
-    if((dx1>3&&dx2<-3)||(dx1<-3&&dx2>3))rev++;
-    if((dy1>3&&dy2<-3)||(dy1<-3&&dy2>3))rev++;
+    if((dx1>8&&dx2<-8)||(dx1<-8&&dx2>8))rev++;
+    if((dy1>8&&dy2<-8)||(dy1<-8&&dy2>8))rev++;
   }
-  return rev>=3;
+  return rev>=5;
 }
 
 function resetScrub(){
@@ -1561,19 +1574,27 @@ function tkResetScrub(){_tkScrubMoves=[];_tkScrubActive=false;var ind=document.g
 function tkAddScrubPt(sx,sy){
   var t=Date.now();
   _tkScrubMoves.push({x:sx,y:sy,t:t});
-  while(_tkScrubMoves.length>0&&t-_tkScrubMoves[0].t>800)_tkScrubMoves.shift();
-  if(_tkScrubMoves.length<10)return false;
+  while(_tkScrubMoves.length>0&&t-_tkScrubMoves[0].t>700)_tkScrubMoves.shift();
+  if(_tkScrubMoves.length<14)return false;
   var n=_tkScrubMoves.length,step=Math.max(1,Math.floor(n/8)),pts=[];
   for(var i=0;i<n;i+=step)pts.push(_tkScrubMoves[i]);
-  if(pts.length<3)return false;
+  if(pts.length<4)return false;
+  var _mnX=pts[0].x,_mxX=pts[0].x,_mnY=pts[0].y,_mxY=pts[0].y;
+  for(var _bi=1;_bi<pts.length;_bi++){
+    if(pts[_bi].x<_mnX)_mnX=pts[_bi].x;
+    if(pts[_bi].x>_mxX)_mxX=pts[_bi].x;
+    if(pts[_bi].y<_mnY)_mnY=pts[_bi].y;
+    if(pts[_bi].y>_mxY)_mxY=pts[_bi].y;
+  }
+  if((_mxX-_mnX)<40&&(_mxY-_mnY)<40)return false;
   var rev=0;
   for(var j=2;j<pts.length;j++){
     var dx1=pts[j-1].x-pts[j-2].x,dx2=pts[j].x-pts[j-1].x;
     var dy1=pts[j-1].y-pts[j-2].y,dy2=pts[j].y-pts[j-1].y;
-    if((dx1>3&&dx2<-3)||(dx1<-3&&dx2>3))rev++;
-    if((dy1>3&&dy2<-3)||(dy1<-3&&dy2>3))rev++;
+    if((dx1>8&&dx2<-8)||(dx1<-8&&dx2>8))rev++;
+    if((dy1>8&&dy2<-8)||(dy1<-8&&dy2>8))rev++;
   }
-  return rev>=3;
+  return rev>=5;
 }
 function _tkSnapshot(tkc){
   var snap=document.createElement("canvas");
@@ -1790,19 +1811,27 @@ function trResetScrub(){_trScrubMoves=[];_trScrubActive=false;var ind=document.g
 function trAddScrubPt(sx,sy){
   var t=Date.now();
   _trScrubMoves.push({x:sx,y:sy,t:t});
-  while(_trScrubMoves.length>0&&t-_trScrubMoves[0].t>800)_trScrubMoves.shift();
-  if(_trScrubMoves.length<10)return false;
+  while(_trScrubMoves.length>0&&t-_trScrubMoves[0].t>700)_trScrubMoves.shift();
+  if(_trScrubMoves.length<14)return false;
   var n=_trScrubMoves.length,step=Math.max(1,Math.floor(n/8)),pts=[];
   for(var i=0;i<n;i+=step)pts.push(_trScrubMoves[i]);
-  if(pts.length<3)return false;
+  if(pts.length<4)return false;
+  var _mnX=pts[0].x,_mxX=pts[0].x,_mnY=pts[0].y,_mxY=pts[0].y;
+  for(var _bi=1;_bi<pts.length;_bi++){
+    if(pts[_bi].x<_mnX)_mnX=pts[_bi].x;
+    if(pts[_bi].x>_mxX)_mxX=pts[_bi].x;
+    if(pts[_bi].y<_mnY)_mnY=pts[_bi].y;
+    if(pts[_bi].y>_mxY)_mxY=pts[_bi].y;
+  }
+  if((_mxX-_mnX)<40&&(_mxY-_mnY)<40)return false;
   var rev=0;
   for(var j=2;j<pts.length;j++){
     var dx1=pts[j-1].x-pts[j-2].x,dx2=pts[j].x-pts[j-1].x;
     var dy1=pts[j-1].y-pts[j-2].y,dy2=pts[j].y-pts[j-1].y;
-    if((dx1>3&&dx2<-3)||(dx1<-3&&dx2>3))rev++;
-    if((dy1>3&&dy2<-3)||(dy1<-3&&dy2>3))rev++;
+    if((dx1>8&&dx2<-8)||(dx1<-8&&dx2>8))rev++;
+    if((dy1>8&&dy2<-8)||(dy1<-8&&dy2>8))rev++;
   }
-  return rev>=3;
+  return rev>=5;
 }
 function _trSnapshot(trc){
   var snap=document.createElement("canvas");
@@ -2073,20 +2102,32 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   }
 
   var lx=0,ly=0,strokeStarted=false;
-  /* Cache the canvas-box rect for the duration of a stroke so each
-     touchmove avoids forcing layout reflow via getBoundingClientRect. */
-  var boxRectCache=null;
-  function _boxRect(){return boxRectCache||(boxRectCache=box.getBoundingClientRect())}
+  /* Cache the canvas's own rect during a stroke. Using cv.getBoundingClientRect()
+     (the canvas itself, not the wrapper) means the rect already reflects the
+     CSS transform's translation, so we only need to divide out the zoom scale —
+     this is the same approach the fullscreen handler uses, and it eliminates
+     the pen-drift caused by stale tx/ty bookkeeping or layout shifts. */
+  var cvRectCache=null;
+  function _cvRect(){return cvRectCache||(cvRectCache=cv.getBoundingClientRect())}
+  function _invalidateCvRect(){cvRectCache=null}
+  /* Refresh the cached rect whenever layout could have shifted (scroll,
+     resize, orientation change). A stale rect is the primary cause of
+     "pen position drifts from finger/pencil tip" reports. */
+  window.addEventListener("scroll",_invalidateCvRect,{passive:true,capture:true});
+  window.addEventListener("resize",_invalidateCvRect,{passive:true});
 
   function toCV(tx,ty){
-    var r=_boxRect();
-    return{x:(tx-r.left-info.tx)/info.scale,y:(ty-r.top-info.ty)/info.scale};
+    var r=_cvRect();
+    return{x:(tx-r.left)/info.scale,y:(ty-r.top)/info.scale};
   }
   function dist2(t){var dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.sqrt(dx*dx+dy*dy)}
   function mid2(t){return{x:(t[0].clientX+t[1].clientX)/2,y:(t[0].clientY+t[1].clientY)/2}}
 
   function applyZoom(){
     cv.style.transform="translate("+info.tx+"px,"+info.ty+"px) scale("+info.scale+")";
+    /* The transform changes cv's bounding rect, so the cached value
+       is no longer valid. Forget it and let the next stroke re-measure. */
+    cvRectCache=null;
     if(ziEl){
       ziEl.textContent=Math.round(info.scale*100)+"%";
       ziEl.classList.add("show");
@@ -2101,7 +2142,9 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
 
   function showERC(clientX,clientY){
     if(!ercEl||pen.mode!=="eraser")return;
-    var r=_boxRect();
+    /* ERC is positioned inside .cv-box (the wrapper), so we need box's rect,
+       not the (transformed) canvas rect. */
+    var r=box.getBoundingClientRect();
     ercEl.style.display="block";
     ercEl.style.width=pen.eraserSize*info.scale+"px";
     ercEl.style.height=pen.eraserSize*info.scale+"px";
@@ -2113,7 +2156,7 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   /* Touch */
   cv.addEventListener("touchstart",function(e){
     autoPalm(e);
-    boxRectCache=box.getBoundingClientRect(); /* refresh once per stroke */
+    cvRectCache=cv.getBoundingClientRect(); /* refresh once per stroke */
     if(e.touches.length===2){
       info.pinching=true;isDraw=false;info.fingerPan=false;
       info.lastDist=dist2(e.touches);
@@ -2190,12 +2233,12 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims){
   cv.addEventListener("touchend",function(e){
     if(e.touches.length<2){info.pinching=false;info.fingerPan=false}
     if(isDraw&&e.touches.length===0){
-      isDraw=false;triggerSave();hideERC();resetScrub();updateUrBtns();boxRectCache=null;
+      isDraw=false;triggerSave();hideERC();resetScrub();updateUrBtns();cvRectCache=null;
     }
   },{passive:false});
 
   cv.addEventListener("touchcancel",function(){
-    info.pinching=false;info.fingerPan=false;isDraw=false;hideERC();resetScrub();boxRectCache=null;
+    info.pinching=false;info.fingerPan=false;isDraw=false;hideERC();resetScrub();cvRectCache=null;
   },{passive:false});
 
   /* Mouse fallback */
