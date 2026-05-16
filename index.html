@@ -721,27 +721,47 @@ function _snapshot(cv){
   return snap;
 }
 
+/* pushUndo previously snapshotted the (often very large) backing buffer
+   synchronously inside the first touchmove of a stroke — copying tens of
+   megabytes mid-input. On high-DPI fullscreen canvases this dropped frames
+   and made the stroke feel jittery. We now schedule the snapshot on the
+   next animation frame so it never blocks an ongoing pen sample. The
+   placeholder reserved in the list is replaced once the copy finishes;
+   if undo is requested before the copy lands, we drop that slot. */
 function pushUndo(){
   var cv=getActiveCanvas();
   if(!cv)return;
   /* Safety net: never capture before the saved drawing is in place,
      otherwise undo could wipe the day's existing handwriting. */
   if(cv.imgReady===false)return;
-  try{
-    undoList.push(_snapshot(cv));
-    if(undoList.length>UNDO_MAX)undoList.shift();
-    redoList=[];
-    updateUrBtns();
-  }catch(e){}
+  var slot={pending:true,snap:null};
+  undoList.push(slot);
+  if(undoList.length>UNDO_MAX)undoList.shift();
+  redoList=[];
+  updateUrBtns();
+  requestAnimationFrame(function(){
+    try{
+      slot.snap=_snapshot(cv);
+      slot.pending=false;
+    }catch(e){slot.pending=false}
+  });
 }
 
 function doUndo(){
   var cv=getActiveCanvas();
   if(!cv||undoList.length===0)return;
-  var current=_snapshot(cv);
-  redoList.push(current);
-  var prev=undoList.pop();
-  _applySnapshot(cv,prev);
+  /* Walk back past any still-pending slots — they represent strokes
+     whose backing snapshot was scheduled but hasn't been captured yet.
+     We could block until they finish, but it's simpler (and matches
+     user intent) to just skip an un-undoable frame. */
+  var prev=null;
+  while(undoList.length>0){
+    var s=undoList.pop();
+    if(s&&!s.pending&&s.snap){prev=s;break}
+  }
+  if(!prev)return;
+  redoList.push({pending:false,snap:_snapshot(cv)});
+  _applySnapshot(cv,prev.snap);
   updateUrBtns();
   triggerSave();
 }
@@ -749,10 +769,14 @@ function doUndo(){
 function doRedo(){
   var cv=getActiveCanvas();
   if(!cv||redoList.length===0)return;
-  var current=_snapshot(cv);
-  undoList.push(current);
-  var nxt=redoList.pop();
-  _applySnapshot(cv,nxt);
+  var nxt=null;
+  while(redoList.length>0){
+    var s=redoList.pop();
+    if(s&&!s.pending&&s.snap){nxt=s;break}
+  }
+  if(!nxt)return;
+  undoList.push({pending:false,snap:_snapshot(cv)});
+  _applySnapshot(cv,nxt.snap);
   updateUrBtns();
   triggerSave();
 }
@@ -2504,13 +2528,43 @@ function openFull(){
       }
     },{passive:false});
 
+    /* Schedule a commit + save after a stroke ends. The commit is deferred
+       to an idle moment (requestIdleCallback when available, otherwise a
+       short timeout) so the downscaling drawImage never lands inside a new
+       stroke's frame budget. If a new stroke starts before the idle fires,
+       we delay further — _commitFullToInline only runs while the pen is up. */
+    var _fcvSaveScheduled=false;
+    function _scheduleFullSave(){
+      if(_fcvSaveScheduled||!fullCv)return;
+      _fcvSaveScheduled=true;
+      var fire=function(){
+        if(!fullCv){_fcvSaveScheduled=false;return}
+        if(isDraw){
+          /* Pen is back down — try again after this stroke ends */
+          setTimeout(fire,120);return;
+        }
+        _fcvSaveScheduled=false;
+        if(fullCv.dirty)_commitFullToInline(true);
+      };
+      if(window.requestIdleCallback){
+        requestIdleCallback(fire,{timeout:300});
+      }else{
+        setTimeout(fire,60);
+      }
+    }
+
     fcv.addEventListener("touchend",function(e){
       if(e.touches.length<2){fullCv.pinching=false;fullCv.fingerPan=false}
-      if(isDraw&&e.touches.length===0){isDraw=false;hideERC2();resetScrub();updateUrBtns();fcvRectCache=null}
+      if(isDraw&&e.touches.length===0){
+        isDraw=false;hideERC2();resetScrub();updateUrBtns();fcvRectCache=null;
+        _scheduleFullSave();
+      }
     },{passive:false});
 
     fcv.addEventListener("touchcancel",function(){
+      var wasDraw=isDraw;
       fullCv.pinching=false;fullCv.fingerPan=false;isDraw=false;hideERC2();resetScrub();
+      if(wasDraw)_scheduleFullSave();
     },{passive:false});
 
     fcv.addEventListener("mousedown",function(e){
@@ -2531,40 +2585,41 @@ function openFull(){
       lx2=p.x;ly2=p.y;
     });
     fcv.addEventListener("mouseup",function(){
-      if(isDraw){isDraw=false;hideERC2();resetScrub();updateUrBtns()}
+      if(isDraw){isDraw=false;hideERC2();resetScrub();updateUrBtns();_scheduleFullSave()}
     });
     fcv.addEventListener("mouseleave",function(){
-      if(isDraw){isDraw=false;hideERC2();resetScrub();updateUrBtns()}
+      if(isDraw){isDraw=false;hideERC2();resetScrub();updateUrBtns();_scheduleFullSave()}
     });
   },100);
 }
 
-onTap(document.getElementById("btn-cvf-close"),function(){
-  if(fullCv){
-    /* Always cache the current fullCv backing for the next open. This
-       way the fullscreen view restores 1:1 from the snapshot instead of
-       re-upscaling from the (lower-resolution) inline curCv, which is
-       what caused cumulative blur on repeated reopens. */
-    try{
-      _fullCvSnapshot=document.createElement("canvas");
-      _fullCvSnapshot.width=fullCv.canvas.width;
-      _fullCvSnapshot.height=fullCv.canvas.height;
-      _fullCvSnapshot.getContext("2d").drawImage(fullCv.canvas,0,0);
-    }catch(e){_fullCvSnapshot=null}
+/* Commit the fullscreen canvas back into the inline canvas and refresh
+   the cached hi-res snapshot. Safe to call on every stroke end so saves
+   happen continuously while drawing in fullscreen — no need to wait for
+   "完了" anymore. The actual write is debounced by triggerSave. */
+function _commitFullToInline(saveAfter){
+  if(!fullCv)return;
+  try{
+    _fullCvSnapshot=document.createElement("canvas");
+    _fullCvSnapshot.width=fullCv.canvas.width;
+    _fullCvSnapshot.height=fullCv.canvas.height;
+    _fullCvSnapshot.getContext("2d").drawImage(fullCv.canvas,0,0);
+  }catch(e){_fullCvSnapshot=null}
 
-    /* Only commit content back to inline canvas if user actually drew.
-       This avoids unnecessary downsampling on quick open/close cycles. */
-    if(curCv&&fullCv.dirty){
-      curCv.ctx.save();
-      curCv.ctx.setTransform(curCv.dpr,0,0,curCv.dpr,0,0);
-      curCv.ctx.clearRect(0,0,curCv.w,curCv.h);
-      curCv.ctx.imageSmoothingEnabled=true;
-      try{curCv.ctx.imageSmoothingQuality="high"}catch(e){}
-      curCv.ctx.drawImage(fullCv.canvas,0,0,fullCv.canvas.width,fullCv.canvas.height,0,0,curCv.w,curCv.h);
-      curCv.ctx.restore();
-      triggerSave();
-    }
+  if(curCv&&fullCv.dirty){
+    curCv.ctx.save();
+    curCv.ctx.setTransform(curCv.dpr,0,0,curCv.dpr,0,0);
+    curCv.ctx.clearRect(0,0,curCv.w,curCv.h);
+    curCv.ctx.imageSmoothingEnabled=true;
+    try{curCv.ctx.imageSmoothingQuality="high"}catch(e){}
+    curCv.ctx.drawImage(fullCv.canvas,0,0,fullCv.canvas.width,fullCv.canvas.height,0,0,curCv.w,curCv.h);
+    curCv.ctx.restore();
+    if(saveAfter!==false)triggerSave();
   }
+}
+
+onTap(document.getElementById("btn-cvf-close"),function(){
+  _commitFullToInline(true);
   document.getElementById("cvf").classList.remove("on");
   fullCv=null;
 });
