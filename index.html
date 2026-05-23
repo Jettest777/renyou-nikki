@@ -739,12 +739,20 @@ function pushUndo(){
   if(undoList.length>UNDO_MAX)undoList.shift();
   redoList=[];
   updateUrBtns();
-  requestAnimationFrame(function(){
+  /* Defer the (potentially large) snapshot to an idle callback so it
+     never lands inside the same frame as a live pen sample. rAF would
+     run in the same paint cycle and could still stutter the stroke. */
+  var _doSnap=function(){
     try{
       slot.snap=_snapshot(cv);
       slot.pending=false;
     }catch(e){slot.pending=false}
-  });
+  };
+  if(window.requestIdleCallback){
+    requestIdleCallback(_doSnap,{timeout:200});
+  }else{
+    setTimeout(_doSnap,0);
+  }
 }
 
 function doUndo(){
@@ -2257,10 +2265,39 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
   }
   function hideERC(){if(ercEl)ercEl.style.display="none"}
 
+  /* Find an active Apple Pencil / stylus in a TouchList. Returns the
+     Touch object or null. Used to keep drawing alive even when fingers
+     land on the screen mid-stroke (resting palm, accidental tap). */
+  function _findStylus(touches){
+    for(var i=0;i<touches.length;i++){if(isStylus(touches[i]))return touches[i]}
+    return null;
+  }
+  /* Begin a drawing stroke from a given Touch — extracted so we can
+     re-enter drawing mode from touchmove if the system cancelled the
+     stroke or a finger arrival flipped us into pinch mode. */
+  function _beginStrokeFromTouch(t){
+    isDraw=true;strokeStarted=false;smoothBegin();
+    var p=toCV(t.clientX,t.clientY);
+    lx=p.x;ly=p.y;
+    resetScrub();
+    showERC(t.clientX,t.clientY);
+    info.pinching=false;info.fingerPan=false;
+  }
+
   /* Touch */
   cv.addEventListener("touchstart",function(e){
     autoPalm(e);
     cvRectCache=cv.getBoundingClientRect(); /* refresh once per stroke */
+    /* PENCIL ALWAYS WINS. If a stylus is among the touches, draw with
+       it regardless of how many fingers are also resting on the screen.
+       This single rule fixes the most common "pen stops responding" case
+       on iPad: palm landing after pen-down → previously flipped us into
+       pinch mode and dropped pen input entirely. */
+    var sty=_findStylus(e.touches);
+    if(sty){
+      if(!isDraw)_beginStrokeFromTouch(sty);
+      e.preventDefault();return;
+    }
     if(e.touches.length===2){
       info.pinching=true;isDraw=false;info.fingerPan=false;
       info.lastDist=dist2(e.touches);
@@ -2275,19 +2312,41 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
         info.lastPanY=e.touches[0].clientY;
         e.preventDefault();return;
       }
-      /* Always accept the pen contact — even if the background image is
-         still loading. Strokes drawn during the load window are preserved
-         and re-composited on top of the background once it arrives. */
-      isDraw=true;strokeStarted=false;smoothBegin();
-      var p=toCV(e.touches[0].clientX,e.touches[0].clientY);
-      lx=p.x;ly=p.y;
-      resetScrub();
-      showERC(e.touches[0].clientX,e.touches[0].clientY);
+      _beginStrokeFromTouch(e.touches[0]);
       e.preventDefault();
     }
   },{passive:false});
 
   cv.addEventListener("touchmove",function(e){
+    /* PENCIL-FIRST in touchmove too. If a stylus is present, drive the
+       stroke from its coordinates even if other fingers are down. This
+       keeps the pen smooth when the palm is also touching the screen. */
+    var sty=_findStylus(e.touches);
+    if(sty){
+      e.preventDefault();
+      /* Rescue path: if the stroke was cancelled (palm-on, system gesture,
+         old-style pinch transition), seamlessly resume from the pen's
+         current position without forcing the user to lift and re-touch. */
+      if(!isDraw)_beginStrokeFromTouch(sty);
+      var tx0=sty.clientX,ty0=sty.clientY;
+      var p=toCV(tx0,ty0);
+      var pr=0;
+      if(typeof sty.force==="number")pr=sty.force;
+      if(!strokeStarted){pushUndo();strokeStarted=true;_fullCvSnapshot=null}
+      var isScrub=false;
+      if(pen.mode==="pen"){
+        isScrub=addScrubPt(tx0,ty0);
+        if(isScrub&&!scrubActive){
+          scrubActive=true;
+          if(scrEl)scrEl.classList.add("show");
+        }
+        if(scrubActive)isScrub=true;
+      }
+      penDraw(ctx,lx,ly,p.x,p.y,pr,isScrub);
+      lx=p.x;ly=p.y;
+      showERC(tx0,ty0);
+      return;
+    }
     if(e.touches.length===2){
       e.preventDefault();
       var d=dist2(e.touches),m=mid2(e.touches);
@@ -2337,14 +2396,37 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
   },{passive:false});
 
   cv.addEventListener("touchend",function(e){
+    /* Don't end the stroke just because A finger lifted — only end when
+       the PEN itself has left the screen. This is what stops the
+       "lifted my palm and now the pen is dead" failure mode. */
+    var sty=_findStylus(e.touches);
+    if(sty){
+      /* Pen is still down. Realign lx/ly to its current position so the
+         next sample doesn't draw a phantom line from where a finger was. */
+      var p=toCV(sty.clientX,sty.clientY);
+      lx=p.x;ly=p.y;
+      info.pinching=false;info.fingerPan=false;
+      return;
+    }
     if(e.touches.length<2){info.pinching=false;info.fingerPan=false}
     if(isDraw&&e.touches.length===0){
       isDraw=false;triggerSave();hideERC();resetScrub();updateUrBtns();cvRectCache=null;
     }
   },{passive:false});
 
-  cv.addEventListener("touchcancel",function(){
-    info.pinching=false;info.fingerPan=false;isDraw=false;hideERC();resetScrub();cvRectCache=null;
+  cv.addEventListener("touchcancel",function(e){
+    /* iPadOS sometimes synthesises touchcancel during a long stroke
+       (system gesture suspicion, status-bar tap, etc.). If the pen is
+       still on the glass when this fires, keep the stroke alive — the
+       touchmove rescue path will resume drawing on the next sample. */
+    var sty=e&&e.touches?_findStylus(e.touches):null;
+    if(sty){
+      info.pinching=false;info.fingerPan=false;
+      return;
+    }
+    info.pinching=false;info.fingerPan=false;
+    if(isDraw){isDraw=false;triggerSave();hideERC();resetScrub();updateUrBtns()}
+    cvRectCache=null;
   },{passive:false});
 
   /* Mouse fallback */
@@ -2501,9 +2583,27 @@ function openFull(){
     }
     function hideERC2(){if(fullCv.ercEl)fullCv.ercEl.style.display="none"}
 
+    function _findStylus2(touches){
+      for(var i=0;i<touches.length;i++){if(isStylus(touches[i]))return touches[i]}
+      return null;
+    }
+    function _beginStrokeF(t){
+      isDraw=true;ss2=false;smoothBegin();
+      var p=toCV2(t.clientX,t.clientY);
+      lx2=p.x;ly2=p.y;resetScrub();
+      showERC2(t.clientX,t.clientY);
+      fullCv.pinching=false;fullCv.fingerPan=false;
+    }
+
     fcv.addEventListener("touchstart",function(e){
       autoPalm(e);
       fcvRectCache=fcv.getBoundingClientRect(); /* refresh once per stroke */
+      /* PENCIL ALWAYS WINS — see inline touchstart for the rationale */
+      var sty=_findStylus2(e.touches);
+      if(sty){
+        if(!isDraw)_beginStrokeF(sty);
+        e.preventDefault();return;
+      }
       if(e.touches.length===2){
         fullCv.pinching=true;isDraw=false;fullCv.fingerPan=false;
         fullCv.lastDist=dist3(e.touches);
@@ -2518,15 +2618,33 @@ function openFull(){
           fullCv.lastPanY=e.touches[0].clientY;
           e.preventDefault();return;
         }
-        isDraw=true;ss2=false;smoothBegin();
-        var p=toCV2(e.touches[0].clientX,e.touches[0].clientY);
-        lx2=p.x;ly2=p.y;resetScrub();
-        showERC2(e.touches[0].clientX,e.touches[0].clientY);
+        _beginStrokeF(e.touches[0]);
         e.preventDefault();
       }
     },{passive:false});
 
     fcv.addEventListener("touchmove",function(e){
+      /* PENCIL-FIRST: if a stylus is on the screen, draw with it
+         regardless of how many fingers also are. Rescues stroke if the
+         system cancelled isDraw. */
+      var sty=_findStylus2(e.touches);
+      if(sty){
+        e.preventDefault();
+        if(!isDraw)_beginStrokeF(sty);
+        var p=toCV2(sty.clientX,sty.clientY);
+        var pr=0;if(typeof sty.force==="number")pr=sty.force;
+        if(!ss2){pushUndo();ss2=true;fullCv.dirty=true}
+        var isScrub=false;
+        if(pen.mode==="pen"){
+          isScrub=addScrubPt(sty.clientX,sty.clientY);
+          if(isScrub&&!scrubActive){scrubActive=true;if(fullCv.scrEl)fullCv.scrEl.classList.add("show")}
+          if(scrubActive)isScrub=true;
+        }
+        penDraw(ctx,lx2,ly2,p.x,p.y,pr,isScrub);
+        lx2=p.x;ly2=p.y;
+        showERC2(sty.clientX,sty.clientY);
+        return;
+      }
       if(e.touches.length===2){
         e.preventDefault();
         var d=dist3(e.touches),m=mid3(e.touches);
@@ -2594,6 +2712,15 @@ function openFull(){
     }
 
     fcv.addEventListener("touchend",function(e){
+      /* Keep stroke alive while the pen is still on the glass — see
+         inline touchend for the rationale. */
+      var sty=_findStylus2(e.touches);
+      if(sty){
+        var p=toCV2(sty.clientX,sty.clientY);
+        lx2=p.x;ly2=p.y;
+        fullCv.pinching=false;fullCv.fingerPan=false;
+        return;
+      }
       if(e.touches.length<2){fullCv.pinching=false;fullCv.fingerPan=false}
       if(isDraw&&e.touches.length===0){
         isDraw=false;hideERC2();resetScrub();updateUrBtns();fcvRectCache=null;
@@ -2601,7 +2728,12 @@ function openFull(){
       }
     },{passive:false});
 
-    fcv.addEventListener("touchcancel",function(){
+    fcv.addEventListener("touchcancel",function(e){
+      var sty=e&&e.touches?_findStylus2(e.touches):null;
+      if(sty){
+        fullCv.pinching=false;fullCv.fingerPan=false;
+        return;
+      }
       var wasDraw=isDraw;
       fullCv.pinching=false;fullCv.fingerPan=false;isDraw=false;hideERC2();resetScrub();
       if(wasDraw)_scheduleFullSave();
@@ -2841,7 +2973,6 @@ function triggerSave(){
       _v:DATA_VERSION
     };
     dbPut(entry).then(function(){
-      toast("保存しました");
       pushToFirebase(entry);
     });
     });
