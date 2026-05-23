@@ -336,6 +336,12 @@ function initFirebase(){
         if(snap.val()===true){setSync("ok","同期中");doFullSync()}
         else setSync("off","オフライン");
       });
+      /* Skip the initial child_added burst — doFullSync handles the
+         existing entries. Without this guard, every existing day fires
+         child_added on startup and races against doFullSync, which can
+         clobber a freshly-written local change. */
+      var _initialLoad=true;
+      _fbRef.once("value",function(){_initialLoad=false});
       _fbRef.on("child_changed",function(snap){
         var rid=snap.key,r=snap.val();
         if(_skipRemoteIds[rid]){delete _skipRemoteIds[rid];return}
@@ -347,6 +353,7 @@ function initFirebase(){
         });
       });
       _fbRef.on("child_added",function(snap){
+        if(_initialLoad)return;
         var rid=snap.key,r=snap.val();
         if(_skipRemoteIds[rid]){delete _skipRemoteIds[rid];return}
         if(!r)return;r.id=rid;
@@ -385,7 +392,15 @@ function doFullSync(){
 
 function pushToFirebase(entry){
   if(!_fbReady||!_fbRef)return;
-  try{_skipRemoteIds[entry.id]=true;_fbRef.child(entry.id).set(entry)}catch(e){}
+  try{
+    /* update() preserves sibling fields the other app wrote (e.g. the
+       handwriting drawing from re:date desktop) — set() would wipe them.
+       This is what kept cross-app changes from sticking. */
+    _skipRemoteIds[entry.id]=true;
+    var patch={};
+    for(var k in entry){if(entry.hasOwnProperty(k))patch[k]=entry[k]}
+    _fbRef.child(entry.id).update(patch);
+  }catch(e){}
 }
 
 var sel=new Date();
