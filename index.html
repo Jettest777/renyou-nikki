@@ -1554,36 +1554,75 @@ function bindDayEvents(existingImg,savedDims,hiResImg,hiResDims){
   onTap(document.getElementById("btn-exp2"),function(){openFull()});
   onTap(document.getElementById("zr-i"),function(){if(curCv)resetZoom(curCv)});
 
-  /* Preload the saved drawing BEFORE creating the canvas so the user can
-     draw immediately on day open and undo/redo capture is correct.
-     We also preload the hi-res snapshot in parallel so makeCanvas can
-     downscale FROM the highest-fidelity source available — this is what
-     keeps past days looking sharp even when the inline canvas dimensions
-     differ from when the drawing was originally captured. */
-  function _setupCanvas(preimg,hiImg){
-    setTimeout(function(){
-      curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",preimg,420,savedDims,hiImg,hiResDims);
-      initTaskPanel();
-    },80);
-  }
-  function _loadHiThen(preimg,cb){
-    if(!hiResImg){cb(preimg,null);return}
-    var hi=new Image();
-    var done=false;
-    hi.onload=function(){if(done)return;done=true;cb(preimg,hi)};
-    hi.onerror=function(){if(done)return;done=true;cb(preimg,null)};
-    hi.src=hiResImg;
-    /* Don't block canvas creation forever if hi-res is huge — fall back
-       after 600ms so the user can start drawing immediately. */
-    setTimeout(function(){if(done)return;done=true;cb(preimg,null)},600);
+  /* The canvas is created IMMEDIATELY so the pen / Pencil never sees a
+     dead spot — touch listeners are bound on the first frame. The saved
+     drawing (and the hi-res variant for past-day quality) are then loaded
+     in the background and composited UNDER any strokes the user has
+     already drawn while waiting. Previously we blocked canvas creation
+     on image load (up to 600ms for hi-res), which is what caused taps
+     and pen contacts to be silently dropped when opening a day. */
+  curCv=makeCanvas("dcv","cvbox","erc-i","zi-i","zr-i","scr-i",null,420,savedDims,null,hiResDims);
+  initTaskPanel();
+  /* Track whether the saved background image has finished loading.
+     triggerSave looks at this so it won't overwrite the saved drawing
+     with a "blank canvas + new strokes only" snapshot while the
+     background blit is still pending. */
+  if(curCv){curCv.bgReady=!existingImg /* nothing to load = ready */}
+
+  /* Load existing drawing (if any) asynchronously and merge it under any
+     user strokes already in progress, so opening a past day never blocks
+     input. */
+  function _mergeBackground(img){
+    if(!curCv||!img)return;
+    try{
+      var dst=curCv.canvas,dctx=curCv.ctx;
+      /* Snapshot whatever the user has drawn so far */
+      var userStrokes=document.createElement("canvas");
+      userStrokes.width=dst.width;userStrokes.height=dst.height;
+      userStrokes.getContext("2d").drawImage(dst,0,0);
+      dctx.save();
+      dctx.setTransform(1,0,0,1,0,0);
+      dctx.globalCompositeOperation="copy";
+      dctx.globalAlpha=1;
+      /* Paint the loaded image as the background */
+      var dw=Math.abs(img.naturalWidth-dst.width);
+      var dh=Math.abs(img.naturalHeight-dst.height);
+      if(dw<=2&&dh<=2){
+        dctx.imageSmoothingEnabled=false;
+        dctx.drawImage(img,0,0);
+      }else{
+        dctx.imageSmoothingEnabled=true;
+        try{dctx.imageSmoothingQuality="high"}catch(e){}
+        dctx.drawImage(img,0,0,dst.width,dst.height);
+      }
+      /* Layer the user's in-progress strokes back on top */
+      dctx.globalCompositeOperation="source-over";
+      dctx.drawImage(userStrokes,0,0);
+      dctx.restore();
+    }catch(e){}
   }
   if(existingImg){
     var preimg=new Image();
-    preimg.onload=function(){_loadHiThen(preimg,_setupCanvas)};
-    preimg.onerror=function(){_loadHiThen(null,_setupCanvas)};
+    preimg.onload=function(){
+      _mergeBackground(preimg);
+      if(curCv)curCv.bgReady=true;
+      /* Hi-res replacement comes later — only swap in when it's a clear
+         quality win (different size, hi-res available). */
+      if(hiResImg){
+        var hi=new Image();
+        hi.onload=function(){
+          if(!curCv)return;
+          if(Math.abs(hi.naturalWidth-curCv.canvas.width)>2||
+             Math.abs(hi.naturalHeight-curCv.canvas.height)>2){
+            _mergeBackground(hi);
+          }
+        };
+        hi.onerror=function(){};
+        hi.src=hiResImg;
+      }
+    };
+    preimg.onerror=function(){if(curCv)curCv.bgReady=true};
     preimg.src=existingImg;
-  }else{
-    _setupCanvas(null,null);
   }
   /* Initialize training panel canvases (small, no preload race) */
   setTimeout(function(){initTrainingPanel()},80);
@@ -2236,7 +2275,9 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
         info.lastPanY=e.touches[0].clientY;
         e.preventDefault();return;
       }
-      if(!info.imgReady){e.preventDefault();return}
+      /* Always accept the pen contact — even if the background image is
+         still loading. Strokes drawn during the load window are preserved
+         and re-composited on top of the background once it arrives. */
       isDraw=true;strokeStarted=false;smoothBegin();
       var p=toCV(e.touches[0].clientX,e.touches[0].clientY);
       lx=p.x;ly=p.y;
@@ -2308,7 +2349,6 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
 
   /* Mouse fallback */
   cv.addEventListener("mousedown",function(e){
-    if(!info.imgReady)return;
     isDraw=true;strokeStarted=false;smoothBegin();
     var p=toCV(e.clientX,e.clientY);lx=p.x;ly=p.y;resetScrub();
   });
@@ -2639,10 +2679,12 @@ function triggerSave(){
     var drawData=null;
     var drawDataReadable=false; /* whether we could reliably inspect curCv */
 
-    /* CRITICAL: only read drawData from curCv if the canvas has finished
-       loading its preimage. Reading too early returns an empty canvas and
-       would overwrite a previously-saved drawing with null. */
-    if(curCv&&curCv.imgReady!==false){
+    /* CRITICAL: only read drawData from curCv if it's safe to do so —
+       both the preimage AND the background blit must be finished. While
+       the background is still loading the canvas might be empty or hold
+       only in-progress strokes; reading it would silently overwrite the
+       persisted drawing. */
+    if(curCv&&curCv.imgReady!==false&&curCv.bgReady!==false){
       try{
         var id=curCv.ctx.getImageData(0,0,curCv.canvas.width,curCv.canvas.height);
         var has=false;
@@ -2657,6 +2699,10 @@ function triggerSave(){
     if(!drawDataReadable&&existingEntry&&existingEntry.drawing){
       drawData=existingEntry.drawing;
     }
+    /* If the task DOM hasn't been built yet (e.g. save triggered before
+       renderDay completes after a cross-device sync), preserve whatever
+       was already persisted so we never null-out the other app's edits. */
+    var _tasksReadable=document.querySelector(".tk-row")!==null;
     var taskData=[];
     var tkRows=document.querySelectorAll(".tk-row");
     for(var ti=0;ti<tkRows.length;ti++){
@@ -2765,13 +2811,32 @@ function triggerSave(){
       drawingHiH=existingEntry.drawingHiH||null;
     }
 
+    /* Preserve fields the DOM didn't have authority over so cross-app
+       sync doesn't clobber the other side's edits. Tasks: if the panel
+       hadn't rendered yet (or has no rows), keep what's already saved.
+       Training: same logic — if no training canvas was found in the
+       DOM at all, keep existing. */
+    var finalTasks;
+    if(_tasksReadable){
+      finalTasks=taskData.length>0?taskData:null;
+    }else{
+      finalTasks=(existingEntry&&existingEntry.tasks)||null;
+    }
+    var _trainingReadable=document.querySelector(".tr-cv")!==null;
+    var finalTraining;
+    if(_trainingReadable){
+      finalTraining=trKeys.length>0?trainingData:null;
+    }else{
+      finalTraining=(existingEntry&&existingEntry.training)||null;
+    }
+
     var entry={
       id:ds,date:ds,monthDay:gmd(sel),yearMonth:ds.substring(0,7),
       drawing:drawData,drawingW:drawingW,drawingH:drawingH,
       drawingHi:drawingHi,drawingHiW:drawingHiW,drawingHiH:drawingHiH,
       sleep:sleep,
-      tasks:taskData.length>0?taskData:null,
-      training:trKeys.length>0?trainingData:null,
+      tasks:finalTasks,
+      training:finalTraining,
       updatedAt:new Date().toISOString(),
       _v:DATA_VERSION
     };
@@ -2973,8 +3038,15 @@ function doFullSync(){
 function pushToFirebase(entry){
   if(!_fbReady||!_fbRef)return;
   try{
+    /* Use update() instead of set() so that fields written by the other
+       app (e.g. re:action mobile setting training media) are preserved
+       even when this side's `entry` object doesn't carry them.
+       set() would atomically replace the whole node and wipe those
+       sibling fields — the root cause of the cross-app sync drops. */
     _skipRemoteIds[entry.id]=true;
-    _fbRef.child(entry.id).set(entry);
+    var patch={};
+    for(var k in entry){if(entry.hasOwnProperty(k))patch[k]=entry[k]}
+    _fbRef.child(entry.id).update(patch);
   }catch(ex){}
 }
 
