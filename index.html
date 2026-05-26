@@ -564,7 +564,15 @@ var isDraw=false,svTm=null;
 var WD=["日","月","火","水","木","金","土"];
 var WDC=["su","wd","wd","wd","wd","wd","sa"];
 var pen={style:"ballpoint",color:"#1a1a1a",width:2,mode:"pen",eraserSize:20};
-var palmReject=true; // デフォルトON
+/* palmReject is persisted across sessions so the user's preference
+   sticks across app launches. We default to ON unless they've
+   explicitly turned it off. */
+var palmReject=true;
+try{
+  var _pr=localStorage.getItem("rn_palm_reject");
+  if(_pr==="0")palmReject=false;
+  else if(_pr==="1")palmReject=true;
+}catch(e){}
 
 /* === 日本の祝日判定 === */
 function _jpBase(y,m,d){
@@ -611,7 +619,111 @@ function getJPHoliday(y,m,d){
   return null;
 }
 var _pencilSeen=false;
-function isStylus(touch){return touch&&touch.touchType==="stylus"}
+
+/* Stylus detection — hybrid of multiple signals, because no single API
+   works across all browsers / iPadOS versions reliably:
+     1. Touch.touchType === "stylus"  (Safari only, but most reliable there)
+     2. Pointer Events with pointerType === "pen" — we listen globally and
+        remember which touch identifiers (and recent positions) belong to a
+        pen, so the touchstart handler can re-classify them after the fact.
+     3. Heuristic fallback — Apple Pencil reports very small radii and a
+        non-zero force; a resting palm is large and zero-force. This is
+        only used when neither signal #1 nor #2 fires.
+   Previously isStylus only used signal #1, which silently fails when the
+   PWA runs in a non-Safari WebKit shell or after iPadOS updates where
+   touchType disappeared — palm rejection then mis-classifies the pen as
+   a finger and refuses to draw. */
+
+/* Pointer-derived stylus tracking */
+var _stylusPointerIds={};      /* PointerEvent.pointerId → true */
+var _stylusRecentPoints=[];    /* recent pen positions (clientX,clientY,t) */
+function _recordStylusPoint(x,y){
+  var now=Date.now();
+  _stylusRecentPoints.push({x:x,y:y,t:now});
+  /* Keep ~500ms worth so a near-simultaneous touchstart can correlate */
+  while(_stylusRecentPoints.length>0&&now-_stylusRecentPoints[0].t>500){
+    _stylusRecentPoints.shift();
+  }
+}
+if(window.PointerEvent){
+  /* Capture pen pointer events at the window level so any canvas inherits
+     the signal. We don't preventDefault here — the canvas's own touch
+     handler still drives drawing. We just classify which touches are pen. */
+  window.addEventListener("pointerdown",function(e){
+    if(e.pointerType==="pen"){
+      _stylusPointerIds[e.pointerId]=true;
+      _recordStylusPoint(e.clientX,e.clientY);
+      if(!_pencilSeen){
+        _pencilSeen=true;
+        /* Auto-enable palm rejection on Pencil detection, but respect
+           an explicit user preference of OFF (set via toolbar toggle). */
+        var _userPref;try{_userPref=localStorage.getItem("rn_palm_reject")}catch(ex){}
+        if(!palmReject&&_userPref!=="0"){palmReject=true;try{localStorage.setItem("rn_palm_reject","1")}catch(ex2){}refreshToolbars();toast("Apple Pencil検出 — パームリジェクションON")}
+      }
+    }
+  },true);
+  window.addEventListener("pointermove",function(e){
+    if(e.pointerType==="pen"){_recordStylusPoint(e.clientX,e.clientY)}
+  },true);
+  window.addEventListener("pointerup",function(e){
+    if(e.pointerType==="pen"){delete _stylusPointerIds[e.pointerId]}
+  },true);
+  window.addEventListener("pointercancel",function(e){
+    if(e.pointerType==="pen"){delete _stylusPointerIds[e.pointerId]}
+  },true);
+}
+
+function _stylusByCorrelation(touch){
+  /* Match a Touch against a recently-seen pen pointer by proximity in
+     space and time. Pointer and Touch fire from the same physical event
+     within a few ms, so a tight tolerance is enough. */
+  if(_stylusRecentPoints.length===0)return false;
+  var tx=touch.clientX,ty=touch.clientY,now=Date.now();
+  for(var i=_stylusRecentPoints.length-1;i>=0;i--){
+    var p=_stylusRecentPoints[i];
+    if(now-p.t>250)break;
+    var dx=p.x-tx,dy=p.y-ty;
+    if(dx*dx+dy*dy<=64)return true; /* within 8px */
+  }
+  return false;
+}
+function _stylusByHeuristic(touch){
+  /* Last-ditch fallback when neither touchType nor pointerType were
+     available. Apple Pencil consistently reports tiny touch radii and a
+     non-zero force; palm/finger contacts report radii ≥ ~10px and zero
+     force. The thresholds are deliberately conservative — we only return
+     true when the contact is clearly pen-like. */
+  var r=Math.max(touch.radiusX||0,touch.radiusY||0);
+  var f=(typeof touch.force==="number")?touch.force:0;
+  if(f>0.05&&r>0&&r<=4)return true;
+  return false;
+}
+function isStylus(touch){
+  if(!touch)return false;
+  if(touch.touchType==="stylus")return true;            /* signal 1 */
+  if(_stylusByCorrelation(touch))return true;           /* signal 2 */
+  if(_stylusByHeuristic(touch))return true;             /* signal 3 */
+  return false;
+}
+
+/* Inverse check used by palm-reject gates: returns true only if we're
+   CONFIDENT this contact is a finger or palm (large radius, no force).
+   When confidence is low, we err on the side of treating the contact as
+   pen-capable so the user isn't locked out of drawing. */
+function isLikelyFinger(touch){
+  if(!touch)return false;
+  if(isStylus(touch))return false;
+  var r=Math.max(touch.radiusX||0,touch.radiusY||0);
+  /* Touch radius reporting is consistent on iPadOS — a finger pad is
+     at least ~10px while Apple Pencil is < 4px. If radius is reported
+     and clearly finger-sized, that's a confident reject. */
+  if(r>=10)return true;
+  /* If the platform reports neither touchType nor pointer correlation
+     nor radius (some non-Safari WebKit builds), we can't be sure; let
+     the touch through so the pen still draws. */
+  return false;
+}
+
 function autoPalm(e){
   if(_pencilSeen)return;
   for(var i=0;i<e.touches.length;i++){
@@ -1232,7 +1344,7 @@ function bindToolbar(container,clearFn){
       if(t.getAttribute("data-cl")){pen.color=t.getAttribute("data-cl");pen.mode="pen";refreshToolbars();return}
       if(t.getAttribute("data-wd")){pen.width=parseInt(t.getAttribute("data-wd"));refreshToolbars();return}
       if(t.getAttribute("data-act")==="clear"){clearFn();return}
-      if(t.getAttribute("data-act")==="palm"){palmReject=!palmReject;refreshToolbars();toast(palmReject?"Apple Pencilのみ反応":"指でも描画可能");return}
+      if(t.getAttribute("data-act")==="palm"){palmReject=!palmReject;try{localStorage.setItem("rn_palm_reject",palmReject?"1":"0")}catch(ex){}refreshToolbars();toast(palmReject?"Apple Pencilのみ反応":"指でも描画可能");return}
       t=t.parentElement;
     }
   });
@@ -1807,7 +1919,7 @@ function initTaskRow(cv){
     }
   }
   cv.addEventListener("touchstart",function(e){
-    if(palmReject&&!isStylus(e.touches[0]))return;
+    if(palmReject&&isLikelyFinger(e.touches[0]))return;
     e.preventDefault();
     drawing=true;strokeStarted=false;scrubFlag=false;tkResetScrub();
     _activeTkCv=tkc;tkUpdateUrBtns();
@@ -2044,7 +2156,7 @@ function initTrainingRow(cv){
     }
   }
   cv.addEventListener("touchstart",function(e){
-    if(palmReject&&!isStylus(e.touches[0]))return;
+    if(palmReject&&isLikelyFinger(e.touches[0]))return;
     e.preventDefault();
     drawing=true;strokeStarted=false;scrubFlag=false;trResetScrub();
     _activeTrCv=trc;trUpdateUrBtns();
@@ -2305,8 +2417,12 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
       hideERC();e.preventDefault();return;
     }
     if(e.touches.length===1&&!info.pinching){
-      if(palmReject&&!isStylus(e.touches[0])){
-        // Finger → pan mode (move canvas)
+      if(palmReject&&isLikelyFinger(e.touches[0])){
+        // Confidently a finger / palm → pan mode (move canvas).
+        // Note: we now use isLikelyFinger (which requires affirmative
+        // evidence of finger contact) instead of !isStylus (which
+        // misclassified pens on browsers without touchType). This is
+        // what fixes "Pencil sometimes doesn't draw after relaunch".
         info.fingerPan=true;
         info.lastPanX=e.touches[0].clientX;
         info.lastPanY=e.touches[0].clientY;
@@ -2611,8 +2727,8 @@ function openFull(){
         hideERC2();e.preventDefault();return;
       }
       if(e.touches.length===1&&!fullCv.pinching){
-        if(palmReject&&!isStylus(e.touches[0])){
-          // Finger → pan mode
+        if(palmReject&&isLikelyFinger(e.touches[0])){
+          // Confidently a finger / palm → pan mode (see inline version).
           fullCv.fingerPan=true;
           fullCv.lastPanX=e.touches[0].clientX;
           fullCv.lastPanY=e.touches[0].clientY;
