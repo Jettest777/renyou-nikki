@@ -69,6 +69,34 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
 .tr-add-hint{font-size:11px;color:var(--sub);font-style:italic;opacity:0.55}
 .tk-edit{cursor:pointer;border-radius:6px}
 .tk-edit:active{background:rgba(192,104,64,.06)}
+/* Drag-reorder visual states */
+.tk-r{transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease,background .18s ease;position:relative}
+.tk-r.tk-pre{background:var(--acc-lt)}
+.tk-r.tk-drag{
+  opacity:.92;
+  background:#fff;
+  box-shadow:0 6px 18px rgba(0,0,0,.18),0 0 0 1px rgba(192,104,64,.35);
+  z-index:5;
+  transition:none;
+}
+.tk-r.tk-shift-up{transform:translateY(-100%)}
+.tk-r.tk-shift-down{transform:translateY(100%)}
+.tk-drop-line{
+  position:absolute;left:8px;right:8px;height:2px;
+  background:var(--acc);
+  border-radius:2px;
+  pointer-events:none;
+  z-index:6;
+}
+.tk-reorder-tip{
+  position:fixed;bottom:84px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.75);color:#fff;
+  padding:8px 14px;border-radius:18px;font-size:12px;font-weight:600;
+  pointer-events:none;z-index:200;
+  opacity:0;transition:opacity .15s;
+}
+.tk-reorder-tip.show{opacity:1}
+body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:none}
 .tr-media{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .tr-media-item{position:relative;width:60px;height:60px;border-radius:6px;overflow:hidden;background:#000;flex-shrink:0;cursor:pointer}
 .tr-media-item img,.tr-media-item video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
@@ -554,6 +582,161 @@ function renderTasks(entry){
       openTaskEdit(idx);
     });
   }
+  /* Long-press to reorder. Sync to Firebase when the drop lands so the
+     new order shows up in re:date desktop immediately. */
+  _attachTaskReorder(list);
+}
+
+/* ===== Task reorder (long-press drag) =====
+   - Long-press a task row for 450ms to enter drag mode.
+   - Light haptic + visual lift indicate the row is grabbed.
+   - While dragging, other rows shift out of the way and a drop line
+     appears at the candidate insertion point.
+   - Release commits the new order to entry.tasks and pushes to Firebase. */
+var _tkDragState=null;
+function _attachTaskReorder(list){
+  var rows=list.querySelectorAll(".tk-r");
+  for(var i=0;i<rows.length;i++){
+    (function(row,idx){
+      row.setAttribute("data-row-i",idx);
+      var pressTm=null,startY=0,startX=0,longPressed=false;
+      function _clearPress(){
+        if(pressTm){clearTimeout(pressTm);pressTm=null}
+        row.classList.remove("tk-pre");
+      }
+      row.addEventListener("touchstart",function(e){
+        if(e.touches.length!==1)return;
+        if(_tkDragState)return;
+        startY=e.touches[0].clientY;startX=e.touches[0].clientX;
+        longPressed=false;
+        row.classList.add("tk-pre");
+        pressTm=setTimeout(function(){
+          longPressed=true;
+          row.classList.remove("tk-pre");
+          _beginTaskDrag(row,idx,e.touches[0].clientY);
+          try{if(navigator.vibrate)navigator.vibrate(15)}catch(ex){}
+        },450);
+      },{passive:true});
+      row.addEventListener("touchmove",function(e){
+        if(!longPressed&&pressTm){
+          /* Cancel pending long-press if user scrolled before threshold */
+          var dx=Math.abs(e.touches[0].clientX-startX);
+          var dy=Math.abs(e.touches[0].clientY-startY);
+          if(dx>8||dy>8)_clearPress();
+        }
+        if(_tkDragState&&_tkDragState.row===row){
+          e.preventDefault();
+          _updateTaskDrag(e.touches[0].clientY);
+        }
+      },{passive:false});
+      row.addEventListener("touchend",function(){
+        _clearPress();
+        if(_tkDragState&&_tkDragState.row===row)_endTaskDrag(false);
+      });
+      row.addEventListener("touchcancel",function(){
+        _clearPress();
+        if(_tkDragState&&_tkDragState.row===row)_endTaskDrag(true);
+      });
+    })(rows[i],i);
+  }
+}
+
+function _beginTaskDrag(row,idx,clientY){
+  var list=document.getElementById("taskList");
+  var rect=row.getBoundingClientRect();
+  _tkDragState={
+    row:row,
+    fromIdx:idx,
+    toIdx:idx,
+    rowHeight:rect.height,
+    listTop:list.getBoundingClientRect().top,
+    pointerOffsetY:clientY-rect.top,
+    listEl:list,
+  };
+  row.classList.add("tk-drag");
+  /* Lock the row at its current visual position relative to the list */
+  row.style.transform="translateY(0px)";
+  document.body.classList.add("tk-no-scroll");
+  _showReorderTip("ドラッグして並び替え");
+}
+
+function _updateTaskDrag(clientY){
+  var s=_tkDragState;if(!s)return;
+  var list=s.listEl;
+  var listRect=list.getBoundingClientRect();
+  /* Position the dragged row visually */
+  var origTop=s.fromIdx*s.rowHeight+listRect.top;
+  var newTop=clientY-s.pointerOffsetY;
+  /* Clamp inside the list bounds */
+  if(newTop<listRect.top)newTop=listRect.top;
+  if(newTop>listRect.bottom-s.rowHeight)newTop=listRect.bottom-s.rowHeight;
+  s.row.style.transform="translateY("+(newTop-origTop)+"px)";
+  /* Decide insertion index based on pointer Y relative to list */
+  var localY=clientY-listRect.top;
+  var newIdx=Math.floor(localY/s.rowHeight);
+  if(newIdx<0)newIdx=0;
+  var maxIdx=list.children.length-1;
+  if(newIdx>maxIdx)newIdx=maxIdx;
+  if(newIdx===s.toIdx)return;
+  s.toIdx=newIdx;
+  /* Shift other rows to make room. Rows between fromIdx and toIdx move
+     in the opposite direction of the drag. */
+  for(var i=0;i<list.children.length;i++){
+    var r=list.children[i];
+    if(r===s.row)continue;
+    r.classList.remove("tk-shift-up","tk-shift-down");
+    if(s.fromIdx<s.toIdx){
+      if(i>s.fromIdx&&i<=s.toIdx)r.classList.add("tk-shift-up");
+    }else if(s.fromIdx>s.toIdx){
+      if(i<s.fromIdx&&i>=s.toIdx)r.classList.add("tk-shift-down");
+    }
+  }
+}
+
+function _endTaskDrag(cancelled){
+  var s=_tkDragState;if(!s)return;
+  _tkDragState=null;
+  document.body.classList.remove("tk-no-scroll");
+  _hideReorderTip();
+  /* Cleanup visual state */
+  var list=s.listEl;
+  for(var i=0;i<list.children.length;i++){
+    list.children[i].classList.remove("tk-shift-up","tk-shift-down","tk-drag","tk-pre");
+    list.children[i].style.transform="";
+  }
+  if(cancelled||s.toIdx===s.fromIdx)return;
+  /* Commit the new order to the entry */
+  ensureEntry().then(function(entry){
+    if(!entry.tasks||!entry.tasks.length)return;
+    var item=entry.tasks.splice(s.fromIdx,1)[0];
+    var insertAt=s.toIdx;
+    if(insertAt<0)insertAt=0;
+    if(insertAt>entry.tasks.length)insertAt=entry.tasks.length;
+    entry.tasks.splice(insertAt,0,item);
+    entry.updatedAt=new Date().toISOString();
+    dbPut(entry).then(function(){
+      pushToFirebase(entry);
+      render();
+      markCalNeedsRefresh();
+    });
+  });
+}
+
+function _showReorderTip(msg){
+  var t=document.getElementById("tkReorderTip");
+  if(!t){
+    t=document.createElement("div");
+    t.id="tkReorderTip";t.className="tk-reorder-tip";
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;
+  /* Force reflow so the show transition fires */
+  void t.offsetWidth;
+  t.classList.add("show");
+}
+function _hideReorderTip(){
+  var t=document.getElementById("tkReorderTip");
+  if(t)t.classList.remove("show");
 }
 
 function renderTraining(entry){
