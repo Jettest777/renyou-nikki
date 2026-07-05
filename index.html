@@ -561,6 +561,28 @@ var curCv=null,fullCv=null;
    inline view is edited or the day is switched. */
 var _fullCvSnapshot=null;
 var isDraw=false,svTm=null;
+/* Timestamp of the most recent drawing sample. Used by _safeRenderDay to
+   avoid rebuilding the day view (and destroying the canvas) mid-stroke. */
+var _lastDrawAt=0;
+/* Re-render the day view only when the pen is idle. Background events
+   (Firebase child_changed echoes, reconnect full-syncs — which fire a lot
+   when the app is left open across midnight) used to call renderDay()
+   directly. If that happened while the user was writing, the canvas was
+   replaced under the pen while the global isDraw flag stayed true, so the
+   next stroke never re-initialised (stale lx/ly → phantom lines, dropped
+   strokes, "the pen feels broken until the app is relaunched"). */
+var _pendingDayRender=false;
+function _safeRenderDay(){
+  var cvfEl=document.getElementById("cvf");
+  var busy=isDraw||(Date.now()-_lastDrawAt<1500)||(cvfEl&&cvfEl.classList.contains("on"));
+  if(busy){
+    if(_pendingDayRender)return;
+    _pendingDayRender=true;
+    setTimeout(function(){_pendingDayRender=false;_safeRenderDay()},1200);
+    return;
+  }
+  renderDay();
+}
 var WD=["日","月","火","水","木","金","土"];
 var WDC=["su","wd","wd","wd","wd","wd","sa"];
 var pen={style:"ballpoint",color:"#1a1a1a",width:2,mode:"pen",eraserSize:20};
@@ -1004,6 +1026,7 @@ function smoothFinish(ctx,x,y){
 }
 
 function penDraw(ctx,x1,y1,x2,y2,pressure,scrubErase){
+  _lastDrawAt=Date.now(); /* every drawing path funnels through here */
   if(pen.mode==="eraser"||scrubErase){
     ctx.globalCompositeOperation="destination-out";
     ctx.strokeStyle="rgba(0,0,0,1)";
@@ -2229,6 +2252,13 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
      a singleton, so on a re-render only one entry should ever be live. */
   if(cvId==="dcv"&&window._cvRectInvalidators){window._cvRectInvalidators.length=0}
 
+  /* A brand-new canvas can never be mid-stroke. Clear the shared isDraw
+     flag so a stale true (left behind if the previous canvas was torn down
+     while the pen was on the glass) can't block the next stroke from
+     initialising — that stale flag was the source of phantom lines and
+     unresponsive pen input after a background re-render. */
+  if(cvId==="dcv")isDraw=false;
+
   var ctx=cv.getContext("2d",{desynchronized:true})||cv.getContext("2d");
   var rect=box.getBoundingClientRect();
   var devDpr=window.devicePixelRatio||2;
@@ -2417,12 +2447,17 @@ function makeCanvas(cvId,boxId,ercId,ziId,zrId,scrId,existingImg,hPx,savedDims,h
       hideERC();e.preventDefault();return;
     }
     if(e.touches.length===1&&!info.pinching){
-      if(palmReject&&isLikelyFinger(e.touches[0])){
+      if(palmReject&&(isLikelyFinger(e.touches[0])||_pencilSeen)){
         // Confidently a finger / palm → pan mode (move canvas).
         // Note: we now use isLikelyFinger (which requires affirmative
         // evidence of finger contact) instead of !isStylus (which
         // misclassified pens on browsers without touchType). This is
         // what fixes "Pencil sometimes doesn't draw after relaunch".
+        // Additionally: once an Apple Pencil has been seen this session
+        // (_pencilSeen), ONLY the pen is allowed to draw — any other
+        // contact pans. Pen touches never reach this branch (they're
+        // claimed by _findStylus above), so this keeps stray palm marks
+        // off the page without locking out pen input.
         info.fingerPan=true;
         info.lastPanX=e.touches[0].clientX;
         info.lastPanY=e.touches[0].clientY;
@@ -2727,8 +2762,9 @@ function openFull(){
         hideERC2();e.preventDefault();return;
       }
       if(e.touches.length===1&&!fullCv.pinching){
-        if(palmReject&&isLikelyFinger(e.touches[0])){
+        if(palmReject&&(isLikelyFinger(e.touches[0])||_pencilSeen)){
           // Confidently a finger / palm → pan mode (see inline version).
+          // Once a Pencil has been seen, only the pen draws (see inline).
           fullCv.fingerPan=true;
           fullCv.lastPanX=e.touches[0].clientX;
           fullCv.lastPanY=e.touches[0].clientY;
@@ -3186,7 +3222,7 @@ function initFirebase(){
         dbGet(rid).then(function(local){
           if(!local||!local.updatedAt||remote.updatedAt>local.updatedAt){
             dbPut(remote).then(function(){
-              if(fmt(sel)===rid)renderDay();
+              if(fmt(sel)===rid)_safeRenderDay(); /* deferred while the pen is active */
               renderCal();
             });
           }
@@ -3269,7 +3305,7 @@ function doFullSync(){
         var total=r.up+r.dl;
         if(total>0){
           toast((r.up?"↑"+r.up+"件 ":"")+(r.dl?"↓"+r.dl+"件 ":"")+"同期完了");
-          if(r.dl>0){renderCal();if(document.getElementById("vw-day").classList.contains("on"))renderDay()}
+          if(r.dl>0){renderCal();if(document.getElementById("vw-day").classList.contains("on"))_safeRenderDay()}
         }
       }).catch(function(){
         _fbSyncing=false;
