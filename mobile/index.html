@@ -914,10 +914,22 @@ function openTaskEdit(idx){
     });
   }
 }
+/* Scroll the page back to the very top. Called after adding a task so the
+   user can immediately tap 「＋ タスクを追加」 again without scrolling up.
+   The extra delayed calls compensate for iOS restoring the scroll position
+   while the software keyboard is being dismissed. */
+function scrollPageTop(){
+  function _top(){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0}
+  _top();
+  setTimeout(_top,120);
+  setTimeout(_top,350);
+}
 function saveTaskEdit(){
-  var v=document.getElementById("taskInput").value;
+  var inp=document.getElementById("taskInput");
+  var v=inp.value;
   v=v?v.trim():"";
   var idx=_editingTaskIdx;
+  inp.blur(); /* dismiss the keyboard before closing so iOS doesn't leave the page scrolled */
   document.getElementById("modal").classList.remove("on");
   _editingTaskIdx=null;
   ensureEntry().then(function(entry){
@@ -939,6 +951,9 @@ function saveTaskEdit(){
       pushToFirebase(entry);
       render();
       markCalNeedsRefresh();
+      /* New task added → return to the top of the page so consecutive adds
+         are easy. Training keeps its original behavior (handled elsewhere). */
+      if(idx===null)scrollPageTop();
       toast(idx===null?"タスクを追加しました":(v?"タスクを更新しました":"タスクを削除しました"));
     });
   });
