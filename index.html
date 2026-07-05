@@ -1691,6 +1691,9 @@ function bindDayEvents(existingImg,savedDims,hiResImg,hiResDims){
     if(!curCv||!confirm("手書きを全て消去しますか？"))return;
     pushUndo();
     curCv.ctx.clearRect(0,0,curCv.w,curCv.h);
+    /* Invalidate the hi-res snapshot as well — leaving it alive made the
+       "cleared" drawing reappear when the fullscreen editor reopened. */
+    _fullCvSnapshot=null;
     triggerSave();
   });
 
@@ -2630,12 +2633,30 @@ function openFull(){
     pushUndo();
     fullCv.ctx.clearRect(0,0,fullCv.w,fullCv.h);
     fullCv.dirty=true;
+    /* Commit + save immediately so the clear persists even if the user
+       closes the app right after (previously it waited for the next
+       stroke end / 完了 tap). */
+    _commitFullToInline(true);
   });
   onTap(document.getElementById("zr-f"),function(){if(fullCv)resetZoom(fullCv)});
 
   setTimeout(function(){
     var body=document.getElementById("cvf-body");
-    var fcv=document.getElementById("cvf-cv");
+    /* CRITICAL FIX: rebuild the fullscreen canvas node on EVERY open.
+       #cvf-cv is a persistent element, but this function attached a brand
+       new set of touch/mouse listeners to it on each open and never
+       removed the old ones. The 2nd open onwards (e.g. writing the next
+       day's diary with the app kept running) therefore ran every stale
+       handler too — each with old stroke coordinates in its closure — so
+       a single pen tap painted phantom lines from wherever the previous
+       session's stroke ended, and every touchmove did N× duplicate work
+       (jerky ink). Cloning the node drops all previously attached
+       listeners; only the fresh set below remains. */
+    var _fcvOld=document.getElementById("cvf-cv");
+    var fcv=_fcvOld.cloneNode(false);
+    _fcvOld.parentNode.replaceChild(fcv,_fcvOld);
+    fcv.style.transform="";      /* forget any zoom/pan from the previous session */
+    isDraw=false;                /* a freshly opened editor can never be mid-stroke */
     var bodyRect=body.getBoundingClientRect();
 
     /* Fill the fullscreen body — ruled lines cover the whole screen */
@@ -3063,7 +3084,14 @@ function triggerSave(){
     }
     var trKeys=[];for(var k in trainingData)trKeys.push(k);
 
-    if(!drawData&&!sleep&&taskData.length===0&&trKeys.length===0)return;
+    /* CRITICAL FIX: an all-erased canvas MUST still be saved. The canvas
+       was readable and is now empty while a drawing (or its hi-res copy)
+       is persisted → the user erased everything, and that erase has to
+       reach IndexedDB/Firebase. The old unconditional early-return
+       skipped the save, which is why 消しゴム／全消去した内容が翌日
+       （再レンダリング時）に復活していた. */
+    var erasedAll=drawDataReadable&&!drawData&&existingEntry&&!!(existingEntry.drawing||existingEntry.drawingHi);
+    if(!erasedAll&&!drawData&&!sleep&&taskData.length===0&&trKeys.length===0)return;
 
     /* Save the canvas backing dimensions so reload can rebuild a canvas
        at the EXACT same size — this lets _blitSaved take the no-smoothing
@@ -3093,6 +3121,14 @@ function triggerSave(){
       drawingHi=existingEntry.drawingHi;
       drawingHiW=existingEntry.drawingHiW||null;
       drawingHiH=existingEntry.drawingHiH||null;
+    }
+    /* The inline canvas is authoritative. If it was readable and is now
+       EMPTY, drop the hi-res copy (and the in-memory snapshot) too —
+       otherwise the erased drawing resurrects through drawingHi on the
+       next renderDay / openFull. */
+    if(drawDataReadable&&!drawData){
+      drawingHi=null;drawingHiW=null;drawingHiH=null;
+      _fullCvSnapshot=null;
     }
 
     /* Preserve fields the DOM didn't have authority over so cross-app
