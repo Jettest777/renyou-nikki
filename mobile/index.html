@@ -304,7 +304,7 @@ function renderCropped(canvas,dataUrl){
 
 var SYNC_URL="";
 try{SYNC_URL=localStorage.getItem("rn_sync_url")||""}catch(e){}
-var _fbApp,_fbDb,_fbRef,_fbStorage=null,_fbReady=false,_skipRemoteIds={};
+var _fbApp,_fbDb,_fbRef,_fbStorage=null,_fbReady=false;
 
 function _deriveStorageBucket(dbUrl){
   if(!dbUrl)return null;
@@ -343,6 +343,17 @@ function loadFirebaseSDK(cb){
   document.head.appendChild(s1);
 }
 
+var _SYNC_OWN=["id","date","monthDay","yearMonth","_v","tasks","training","updatedAt"];
+function _safeRender(){
+  /* 並び替えドラッグ中は描き直さない */
+  if(_tkDragState){setTimeout(_safeRender,400);return}
+  render();
+}
+function _syncRefresh(id,dl){
+  if(id&&fmt(sel)===id)_safeRender();
+  markCalNeedsRefresh();
+}
+
 function initFirebase(){
   if(!SYNC_URL){
     setSync("off","同期未設定");
@@ -361,75 +372,272 @@ function initFirebase(){
       try{if(firebase.storage)_fbStorage=firebase.storage()}catch(stErr){_fbStorage=null}
       _fbReady=true;
       _fbDb.ref(".info/connected").on("value",function(snap){
-        if(snap.val()===true){setSync("ok","同期中");doFullSync()}
-        else setSync("off","オフライン");
+        _fbConnected=snap.val()===true;
+        if(_fbConnected){
+          setSync("ok","同期中");
+          /* 表示中の日の受信を先に通してから、他の日を軽く突き合わせる */
+          setTimeout(function(){reconcile(false)},1500);
+        }else setSync("off","オフライン");
       });
-      /* Skip the initial child_added burst — doFullSync handles the
-         existing entries. Without this guard, every existing day fires
-         child_added on startup and races against doFullSync, which can
-         clobber a freshly-written local change. */
-      var _initialLoad=true;
-      _fbRef.once("value",function(){_initialLoad=false});
-      _fbRef.on("child_changed",function(snap){
-        var rid=snap.key,r=snap.val();
-        if(_skipRemoteIds[rid]){delete _skipRemoteIds[rid];return}
-        if(!r)return;r.id=rid;
-        dbGet(rid).then(function(local){
-          if(!local||!local.updatedAt||r.updatedAt>local.updatedAt){
-            dbPut(r).then(function(){if(fmt(sel)===rid)render();markCalNeedsRefresh()});
-          }
-        });
-      });
-      _fbRef.on("child_added",function(snap){
-        if(_initialLoad)return;
-        var rid=snap.key,r=snap.val();
-        if(_skipRemoteIds[rid]){delete _skipRemoteIds[rid];return}
-        if(!r)return;r.id=rid;
-        dbGet(rid).then(function(local){
-          if(!local){dbPut(r).then(function(){markCalNeedsRefresh()})}
-        });
-      });
+      _watchDay(fmt(sel));
     }catch(e){setSync("err","初期化エラー")}
   });
 }
 
-function doFullSync(){
-  if(!_fbReady||!_fbRef)return;
-  dbAll().then(function(local){
-    _fbRef.once("value",function(snap){
-      var remote=snap.val()||{},lmap={};
-      for(var i=0;i<local.length;i++)lmap[local[i].id]=local[i];
-      var toUp={},toSave=[],id;
-      for(id in lmap){
-        var le=lmap[id],re=remote[id];
-        if(!re||!re.updatedAt||(le.updatedAt&&le.updatedAt>re.updatedAt))toUp[id]=le;
-        else if(re.updatedAt&&(!le.updatedAt||re.updatedAt>le.updatedAt)){re.id=id;toSave.push(re)}
-      }
-      for(id in remote){if(!lmap[id]){remote[id].id=id;toSave.push(remote[id])}}
-      var up=Promise.resolve();
-      var upKeys=[];for(var k in toUp)upKeys.push(k);
-      if(upKeys.length>0){up=new Promise(function(o){_fbRef.update(toUp,function(){o()})})}
-      up.then(function(){
-        var c=Promise.resolve();
-        for(var j=0;j<toSave.length;j++){(function(e){c=c.then(function(){return dbPut(e)})})(toSave[j])}
-        c.then(function(){render();refreshCalDays()});
-      });
-    });
-  });
+/* ============================
+   Sync core v2 (re:date / re:action 共通)
+   ----------------------------------------------------------
+   以前は diary 全体にリスナーを張り、接続のたびに全日分（手書き画像・
+   動画を含む）をダウンロードし、チェック1つでも1日分まるごと送信して
+   いたため、反映が非常に遅かった。v2 では:
+   1. 表示中の日だけをリアルタイム監視（最初に届くのはその1日分だけ）
+   2. 変更があったフィールドだけを送信（例: tasks/2/done と updatedAt）
+   3. 他の日の突き合わせは updatedAt だけを比較する軽量処理に変更
+   4. 復帰時（バックグラウンド→前面）に即座に再接続
+   ============================ */
+var _fbConnected=false;
+var _watchId=null,_watchRef=null,_watchCb=null,_watchSeen=false,_remoteDay=null;
+var _applyQ=Promise.resolve();
+var _lastRecon=0,_reconBusy=false,_hiddenAt=0,_pendingPush={};
+
+function _has(o,k){return Object.prototype.hasOwnProperty.call(o,k)}
+/* Realtime Database は null・空配列・空オブジェクトを保存しないので、
+   比較時はそれらをすべて「無し」として扱う。 */
+function _isEmpty(v){
+  if(v===null||v===undefined)return true;
+  if(typeof v==="object"){for(var k in v){if(_has(v,k)&&!_isEmpty(v[k]))return false}return true}
+  return false;
+}
+function _same(a,b){
+  var ea=_isEmpty(a),eb=_isEmpty(b);
+  if(ea||eb)return ea&&eb;
+  if(typeof a!=="object"||typeof b!=="object")return a===b;
+  var k;
+  for(k in a){if(_has(a,k)&&!_same(a[k],b[k]))return false}
+  for(k in b){if(_has(b,k)&&!_has(a,k)&&!_isEmpty(b[k]))return false}
+  return true;
+}
+function _clean(v){
+  if(_isEmpty(v))return null;
+  if(typeof v!=="object")return v;
+  return JSON.parse(JSON.stringify(v));
+}
+/* base（サーバー側の最新）と cur（ローカル）の差分を、update() 用の
+   「パス → 値」に展開する。depth 段まで掘り下げる。 */
+function _diff(base,cur,path,out,depth){
+  if(_same(base,cur))return;
+  if(depth>0&&base&&cur&&typeof base==="object"&&typeof cur==="object"){
+    var seen={},k;
+    for(k in cur){if(_has(cur,k)){seen[k]=1;_diff(base[k],cur[k],path+"/"+k,out,depth-1)}}
+    for(k in base){if(_has(base,k)&&!seen[k]&&!_isEmpty(base[k]))out[path+"/"+k]=null}
+    return;
+  }
+  out[path]=_clean(cur);
+}
+function _validId(id){return /^\d{4}-\d{2}-\d{2}$/.test(id)}
+function _normEntry(e,id){
+  e.id=id;
+  if(!e.date)e.date=id;
+  if(!e.monthDay)e.monthDay=id.substring(5);
+  if(!e.yearMonth)e.yearMonth=id.substring(0,7);
+  if(e.tasks&&typeof e.tasks==="object"){
+    var arr=[],ks,i;
+    if(Array.isArray(e.tasks)){for(i=0;i<e.tasks.length;i++){if(e.tasks[i])arr.push(e.tasks[i])}}
+    else{
+      ks=Object.keys(e.tasks).sort(function(a,b){return a-b});
+      for(i=0;i<ks.length;i++){if(e.tasks[ks[i]])arr.push(e.tasks[ks[i]])}
+    }
+    e.tasks=arr;
+  }
+  return e;
+}
+function _dirtyMap(){
+  try{return JSON.parse(localStorage.getItem("rn_sync_dirty")||"{}")||{}}catch(e){return {}}
+}
+function _markDirty(id,on){
+  try{
+    var m=_dirtyMap();
+    if(on){if(m[id])return;m[id]=1}else{if(!m[id])return;delete m[id]}
+    localStorage.setItem("rn_sync_dirty",JSON.stringify(m));
+  }catch(e){}
 }
 
 function pushToFirebase(entry){
-  if(!_fbReady||!_fbRef)return;
+  if(!_fbReady||!_fbRef||!entry||!entry.id)return;
   try{
-    /* update() preserves sibling fields the other app wrote (e.g. the
-       handwriting drawing from re:date desktop) — set() would wipe them.
-       This is what kept cross-app changes from sticking. */
-    _skipRemoteIds[entry.id]=true;
-    var patch={};
-    for(var k in entry){if(entry.hasOwnProperty(k))patch[k]=entry[k]}
-    _fbRef.child(entry.id).update(patch);
+    var id=entry.id,cur={},patch={},k,i,n=0;
+    if(_SYNC_OWN){
+      for(i=0;i<_SYNC_OWN.length;i++){k=_SYNC_OWN[i];if(_has(entry,k))cur[k]=entry[k]}
+    }else{
+      for(k in entry){if(_has(entry,k))cur[k]=entry[k]}
+    }
+    if(_watchId===id&&_watchSeen&&_remoteDay){
+      /* 監視中の日: サーバーの最新状態との差分だけ送る */
+      for(k in cur)_diff(_remoteDay[k],cur[k],k,patch,2);
+    }else{
+      for(k in cur)patch[k]=_clean(cur[k]);
+    }
+    for(k in patch)n++;
+    if(!n)return;
+    _markDirty(id,true);
+    _pendingPush[id]=(_pendingPush[id]||0)+1;
+    _fbRef.child(id).update(patch,function(err){
+      _pendingPush[id]=Math.max(0,(_pendingPush[id]||1)-1);
+      if(!err&&!_pendingPush[id])_markDirty(id,false);
+    });
   }catch(e){}
 }
+
+/* 表示中の日だけをリアルタイム監視する */
+function _watchDay(id){
+  if(!_fbReady||!_fbRef||!_validId(id))return;
+  if(_watchId===id)return;
+  if(_watchRef&&_watchCb){try{_watchRef.off("value",_watchCb)}catch(e){}}
+  _watchId=id;_watchSeen=false;_remoteDay=null;
+  _watchRef=_fbRef.child(id);
+  _watchCb=_watchRef.on("value",function(snap){
+    if(_watchId!==id)return;
+    _onDayValue(id,snap);
+  });
+}
+function _unwatchDay(){
+  if(_watchRef&&_watchCb){try{_watchRef.off("value",_watchCb)}catch(e){}}
+  _watchId=null;_watchRef=null;_watchCb=null;_watchSeen=false;_remoteDay=null;
+}
+function _onDayValue(id,snap){
+  var first=!_watchSeen;
+  _watchSeen=true;
+  _remoteDay=snap.val()||{};   /* 差分計算用の基準（別インスタンス） */
+  var remote=snap.val();
+  _applyQ=_applyQ.then(function(){
+    return dbGet(id).then(function(local){
+      if(!remote){
+        if(first&&local&&local.updatedAt)pushToFirebase(local);
+        return;
+      }
+      if(local&&remote.updatedAt===local.updatedAt)return; /* 自分の書き込みの反射、または同期済み */
+      if(local&&first&&local.updatedAt&&(!remote.updatedAt||local.updatedAt>remote.updatedAt)){
+        /* オフライン中のローカル変更が新しい → アップロード */
+        pushToFirebase(local);
+        return;
+      }
+      return dbPut(_normEntry(remote,id)).then(function(){_syncRefresh(id,0)});
+    });
+  }).catch(function(){});
+}
+
+function _withTimeout(p,ms){
+  return new Promise(function(ok){
+    var done=false;
+    var t=setTimeout(function(){if(!done){done=true;ok(undefined)}},ms);
+    p.then(function(v){if(!done){done=true;clearTimeout(t);ok(v)}},function(){if(!done){done=true;clearTimeout(t);ok(undefined)}});
+  });
+}
+function _onceVal(ref){
+  return _withTimeout(new Promise(function(ok,no){
+    ref.once("value",function(s){ok(s.val())},function(){no()});
+  }),20000);
+}
+/* 日付キーの一覧だけを取得（中身はダウンロードしない） */
+function _remoteKeys(){
+  if(typeof fetch!=="function")return Promise.resolve(null);
+  var url=SYNC_URL.replace(/\/+$/,"")+"/diary.json?shallow=true";
+  return _withTimeout(fetch(url,{cache:"no-store"}).then(function(r){
+    if(!r.ok)return null;
+    return r.json().then(function(j){return j||{}});
+  }),15000).then(function(v){return v===undefined?null:v});
+}
+function _runJobs(jobs,par){
+  return new Promise(function(ok){
+    var i=0,active=0;
+    function next(){
+      if(i>=jobs.length&&active===0){ok();return}
+      while(active<par&&i<jobs.length){
+        active++;
+        (function(job){
+          var p;try{p=job()}catch(e){p=null}
+          Promise.resolve(p).then(function(){active--;next()},function(){active--;next()});
+        })(jobs[i++]);
+      }
+    }
+    next();
+  });
+}
+/* 表示中以外の日の突き合わせ。updatedAt だけを比べ、必要な日だけ送受信する。
+   force=false: 直近35日＋未送信分のみ / force=true: 全日 */
+function reconcile(force){
+  if(!_fbReady||!_fbRef||_reconBusy)return Promise.resolve(null);
+  var now=Date.now();
+  if(!force&&now-_lastRecon<120000)return Promise.resolve(null);
+  _reconBusy=true;_lastRecon=now;
+  var up=0,dl=0;
+  function dlJob(id){
+    return function(){
+      return _onceVal(_fbRef.child(id)).then(function(r){
+        if(!r)return;
+        dl++;
+        return dbPut(_normEntry(r,id));
+      });
+    };
+  }
+  function cmpJob(le){
+    return function(){
+      return _onceVal(_fbRef.child(le.id+"/updatedAt")).then(function(r){
+        if(r===undefined)return; /* timeout */
+        if(!r){if(le.updatedAt){up++;pushToFirebase(le)}return}
+        if(le.updatedAt&&le.updatedAt>r){up++;pushToFirebase(le);return}
+        if(!le.updatedAt||r>le.updatedAt)return dlJob(le.id)();
+        _markDirty(le.id,false);
+      });
+    };
+  }
+  return Promise.all([dbAll(),_remoteKeys()]).then(function(res){
+    var local=res[0]||[],keys=res[1],lmap={},i,id,jobs=[];
+    for(i=0;i<local.length;i++){if(local[i]&&local[i].id)lmap[local[i].id]=local[i]}
+    if(keys===null&&local.length===0){
+      /* 新しい端末でキー一覧が取れない場合のみ、従来どおり全件取得 */
+      return _onceVal(_fbRef).then(function(all){
+        var c=Promise.resolve();
+        for(var rid in (all||{})){
+          if(!_validId(rid)||!all[rid])continue;
+          (function(e,eid){dl++;c=c.then(function(){return dbPut(_normEntry(e,eid))})})(all[rid],rid);
+        }
+        return c;
+      });
+    }
+    var cut=new Date(now-35*86400000);
+    cut=cut.getFullYear()+"-"+("0"+(cut.getMonth()+1)).slice(-2)+"-"+("0"+cut.getDate()).slice(-2);
+    var dirty=_dirtyMap();
+    for(id in lmap){
+      if(id===_watchId||!_validId(id))continue;
+      if(keys&&!keys[id]){
+        if(lmap[id].updatedAt){(function(le){jobs.push(function(){up++;pushToFirebase(le)})})(lmap[id])}
+        continue;
+      }
+      if(force||dirty[id]||id>=cut)jobs.push(cmpJob(lmap[id]));
+    }
+    if(keys){for(id in keys){if(!lmap[id]&&id!==_watchId&&_validId(id))jobs.push(dlJob(id))}}
+    return _runJobs(jobs,4);
+  }).then(function(){
+    _reconBusy=false;
+    if(dl>0)_syncRefresh(null,dl);
+    return {up:up,dl:dl};
+  },function(){
+    _reconBusy=false;
+    return null;
+  });
+}
+/* 前面復帰・回線復帰時は、切れたままの接続を待たずに即つなぎ直す */
+function _syncKick(){
+  if(!_fbDb||!_fbReady)return;
+  try{_fbDb.goOffline();_fbDb.goOnline()}catch(e){}
+}
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){_hiddenAt=Date.now();return}
+  if(_hiddenAt&&Date.now()-_hiddenAt>4000)_syncKick();
+  _hiddenAt=0;
+});
+window.addEventListener("online",function(){_syncKick()});
 
 var sel=new Date();
 sel.setHours(0,0,0,0);
@@ -531,6 +739,7 @@ function markCalNeedsRefresh(){
 
 function render(){
   var ds=fmt(sel);
+  _watchDay(ds); /* 表示中の日をリアルタイム監視 */
   dbGet(ds).then(function(entry){
     entry=entry||{};
     renderTasks(entry);
@@ -1224,30 +1433,51 @@ document.getElementById("syncSave").addEventListener("click",function(){
   toast("同期URLを設定しました");
 });
 
+/* ===== 画面全体の左右フリックで日付を1日移動 =====
+   どこから始めても反応するが、誤作動防止のため「はっきりした横フリック」
+   だけを拾う: 画面幅の約22%（70〜120px）以上・0.6秒以内・ほぼ水平・1本指。
+   縦スクロールやゆっくりしたドラッグ、並び替え中・入力中は無視する。 */
 (function(){
-  var sx=0,sy=0,active=false;
-  document.body.addEventListener("touchstart",function(e){
-    if(e.touches.length!==1)return;
-    if(document.getElementById("modal").classList.contains("on"))return;
-    if(document.getElementById("trModal").classList.contains("on"))return;
-    sx=e.touches[0].clientX;
-    sy=e.touches[0].clientY;
-    active=true;
-  },{passive:true});
-  document.body.addEventListener("touchend",function(e){
-    if(!active)return;
-    active=false;
-    var ct=e.changedTouches[0];
-    if(!ct)return;
-    var dx=ct.clientX-sx,dy=ct.clientY-sy;
-    if(Math.abs(dx)<60||Math.abs(dy)>40)return;
-    var t=e.target;
-    while(t&&t!==document.body){
-      if(t.tagName==="CANVAS"||t.tagName==="BUTTON"||t.tagName==="TEXTAREA"||t.tagName==="INPUT"||(t.classList&&(t.classList.contains("tk-c")||t.classList.contains("dc")||t.classList.contains("cal"))))return;
+  var sx=0,sy=0,st=0,active=false,maxDy=0;
+  function blocked(t){
+    if(_tkDragState)return true;
+    if(document.getElementById("modal").classList.contains("on"))return true;
+    if(document.getElementById("trModal").classList.contains("on"))return true;
+    if(document.querySelector(".media-viewer"))return true;
+    while(t&&t.nodeType===1&&t!==document.body){
+      if(t.tagName==="TEXTAREA"||t.tagName==="INPUT"||t.tagName==="SELECT")return true;
+      if(t.classList&&(t.classList.contains("cal")||t.classList.contains("setup")))return true;
       t=t.parentElement;
     }
+    return false;
+  }
+  document.addEventListener("touchstart",function(e){
+    if(e.touches.length!==1||blocked(e.target)){active=false;return}
+    sx=e.touches[0].clientX;sy=e.touches[0].clientY;st=Date.now();maxDy=0;
+    active=true;
+  },{passive:true,capture:true});
+  document.addEventListener("touchmove",function(e){
+    if(!active)return;
+    if(e.touches.length!==1||_tkDragState){active=false;return}
+    var dy=Math.abs(e.touches[0].clientY-sy);
+    if(dy>maxDy)maxDy=dy;
+    if(maxDy>60)active=false; /* 縦スクロールとみなす */
+  },{passive:true,capture:true});
+  document.addEventListener("touchcancel",function(){active=false},{passive:true,capture:true});
+  document.addEventListener("touchend",function(e){
+    if(!active)return;
+    active=false;
+    if(e.touches.length>0||_tkDragState)return;
+    var ct=e.changedTouches[0];
+    if(!ct)return;
+    var dx=ct.clientX-sx,dy=ct.clientY-sy,ax=Math.abs(dx),dt=Date.now()-st;
+    var need=Math.max(70,Math.min(120,window.innerWidth*0.22));
+    if(ax<need)return;                 /* 距離が足りない */
+    if(dt>600)return;                  /* ゆっくりしたドラッグ */
+    if(Math.abs(dy)>ax*0.4||maxDy>ax*0.5)return; /* 斜め・縦方向 */
     navDay(dx<0?1:-1);
-  },{passive:true});
+    toast((sel.getMonth()+1)+"月"+sel.getDate()+"日 ("+WD[sel.getDay()]+")");
+  },{passive:true,capture:true});
 })();
 
 updateDateDisplay();
