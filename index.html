@@ -1380,6 +1380,7 @@ function renderDay(){
   undoList=[];redoList=[];_fullCvSnapshot=null;
   var wrap=document.getElementById("dw");
   var ds=fmt(sel),md=gmd(sel),dw=sel.getDay(),yr=sel.getFullYear();
+  _watchDay(ds); /* 表示中の日をリアルタイム監視 */
 
   dbGet(ds).then(function(entry){
     entry=entry||{};
@@ -2021,7 +2022,7 @@ function toggleTaskCheck(el){
     el.classList.add("done");
     el.querySelector("svg").innerHTML='<rect x="1" y="1" width="20" height="20"/><path d="M6 11 L10 15 L16 7"/>';
   }
-  triggerSave();
+  triggerSave(150);
 }
 
 /* ============================
@@ -2135,7 +2136,7 @@ function toggleTrCheck(el){
     el.classList.add("done");
     el.querySelector("svg").innerHTML='<rect x="1" y="1" width="20" height="20"/><path d="M6 11 L10 15 L16 7"/>';
   }
-  triggerSave();
+  triggerSave(150);
 }
 function initTrainingRow(cv){
   if(!cv)return;
@@ -2972,7 +2973,8 @@ onTap(document.getElementById("btn-cvf-close"),function(){
 /* ============================
    Auto Save
    ============================ */
-function triggerSave(){
+/* delay: チェックのON/OFFなど即時に同期したい操作は短い待ち時間で保存する */
+function triggerSave(delay){
   if(svTm)clearTimeout(svTm);
   svTm=setTimeout(function(){
     var ds=fmt(sel);
@@ -3164,7 +3166,7 @@ function triggerSave(){
       pushToFirebase(entry);
     });
     });
-  },800);
+  },typeof delay==="number"?delay:800);
 }
 
 /* ============================
@@ -3175,7 +3177,6 @@ try{SYNC_URL=localStorage.getItem("rn_sync_url")||""}catch(e){}
 
 var _fbApp=null,_fbDb=null,_fbRef=null,_fbStorage=null,_fbListening=false;
 var _fbReady=false,_fbSyncing=false;
-var _skipRemoteIds={};
 
 function setSyncUI(state,msg){
   var dot=document.getElementById("sdot");
@@ -3238,51 +3239,18 @@ function initFirebase(){
 
       // Monitor connection state
       _fbDb.ref(".info/connected").on("value",function(snap){
-        if(snap.val()===true){
+        _fbConnected=snap.val()===true;
+        if(_fbConnected){
           setSyncUI("ok","リアルタイム同期中");
-          // On reconnect, do a full sync
-          doFullSync();
+          /* 表示中の日の受信を先に通してから、他の日を軽く突き合わせる */
+          setTimeout(function(){doFullSync(false)},1500);
         }else{
           setSyncUI("off","オフライン（ローカル保存中）");
         }
       });
 
-      // Listen for remote changes (child_changed)
-      _fbRef.on("child_changed",function(snap){
-        var remote=snap.val();
-        if(!remote)return;
-        var rid=snap.key;
-        // Skip if we just wrote this ourselves
-        if(_skipRemoteIds[rid]){delete _skipRemoteIds[rid];return}
-        remote.id=rid;
-        dbGet(rid).then(function(local){
-          if(!local||!local.updatedAt||remote.updatedAt>local.updatedAt){
-            dbPut(remote).then(function(){
-              if(fmt(sel)===rid)_safeRenderDay(); /* deferred while the pen is active */
-              renderCal();
-            });
-          }
-        }).catch(function(){});
-      });
-
-      // Listen for new remote entries (child_added fires for existing too)
-      var _initialLoad=true;
-      _fbRef.once("value",function(){
-        _initialLoad=false;
-      });
-      _fbRef.on("child_added",function(snap){
-        if(_initialLoad)return; // skip initial batch — handled by doFullSync
-        var remote=snap.val();
-        if(!remote)return;
-        var rid=snap.key;
-        if(_skipRemoteIds[rid]){delete _skipRemoteIds[rid];return}
-        remote.id=rid;
-        dbGet(rid).then(function(local){
-          if(!local){
-            dbPut(remote).then(function(){renderCal()});
-          }
-        }).catch(function(){});
-      });
+      /* 表示中の日だけをリアルタイム監視（diary 全体は監視しない） */
+      _watchDay(fmt(sel));
 
     }catch(ex){
       setSyncUI("err","Firebase初期化エラー");
@@ -3290,84 +3258,280 @@ function initFirebase(){
   });
 }
 
-function doFullSync(){
+var _SYNC_OWN=null; /* re:date は全フィールドを扱う */
+function _syncRefresh(id,dl){
+  if(id&&fmt(sel)===id)_safeRenderDay(); /* deferred while the pen is active */
+  try{renderCal()}catch(e){}
+}
+function doFullSync(force){
   if(!_fbReady||!_fbRef||_fbSyncing)return;
   _fbSyncing=true;
-  setSyncUI("ok","同期中...");
+  if(force)setSyncUI("ok","同期中...");
+  reconcile(!!force).then(function(r){
+    _fbSyncing=false;
+    if(_fbConnected)setSyncUI("ok","リアルタイム同期中");
+    else setSyncUI("off","オフライン（ローカル保存中）");
+    if(!r)return;
+    var total=r.up+r.dl;
+    if(total>0)toast((r.up?"↑"+r.up+"件 ":"")+(r.dl?"↓"+r.dl+"件 ":"")+"同期完了");
+    else if(force)toast("最新の状態です");
+  });
+}
 
-  dbAll().then(function(local){
-    _fbRef.once("value",function(snap){
-      var remote=snap.val()||{};
-      var lmap={},i;
-      for(i=0;i<local.length;i++)lmap[local[i].id]=local[i];
+/* ============================
+   Sync core v2 (re:date / re:action 共通)
+   ----------------------------------------------------------
+   以前は diary 全体にリスナーを張り、接続のたびに全日分（手書き画像・
+   動画を含む）をダウンロードし、チェック1つでも1日分まるごと送信して
+   いたため、反映が非常に遅かった。v2 では:
+   1. 表示中の日だけをリアルタイム監視（最初に届くのはその1日分だけ）
+   2. 変更があったフィールドだけを送信（例: tasks/2/done と updatedAt）
+   3. 他の日の突き合わせは updatedAt だけを比較する軽量処理に変更
+   4. 復帰時（バックグラウンド→前面）に即座に再接続
+   ============================ */
+var _fbConnected=false;
+var _watchId=null,_watchRef=null,_watchCb=null,_watchSeen=false,_remoteDay=null;
+var _applyQ=Promise.resolve();
+var _lastRecon=0,_reconBusy=false,_hiddenAt=0,_pendingPush={};
 
-      var toUp={},toSave=[],upCt=0,dlCt=0;
-      var id;
-      for(id in lmap){
-        var le=lmap[id],re=remote[id];
-        if(!re||!re.updatedAt||le.updatedAt>re.updatedAt){
-          toUp[id]=le;upCt++;
-        }else if(re.updatedAt>le.updatedAt){
-          re.id=id;toSave.push(re);dlCt++;
-        }
-      }
-      for(id in remote){
-        if(!lmap[id]){remote[id].id=id;toSave.push(remote[id]);dlCt++}
-      }
-
-      // Upload local-newer
-      var uploadDone;
-      if(upCt>0){
-        uploadDone=new Promise(function(ok){
-          _fbRef.update(toUp,function(err){ok(!err)});
-        });
-      }else{
-        uploadDone=Promise.resolve(true);
-      }
-
-      uploadDone.then(function(){
-        // Save remote-newer locally
-        var chain=Promise.resolve();
-        for(var j=0;j<toSave.length;j++){
-          (function(ent){
-            if(!ent.id)return;
-            chain=chain.then(function(){return dbPut(ent)});
-          })(toSave[j]);
-        }
-        return chain.then(function(){return{up:upCt,dl:dlCt}});
-      }).then(function(r){
-        _fbSyncing=false;
-        setSyncUI("ok","リアルタイム同期中");
-        var total=r.up+r.dl;
-        if(total>0){
-          toast((r.up?"↑"+r.up+"件 ":"")+(r.dl?"↓"+r.dl+"件 ":"")+"同期完了");
-          if(r.dl>0){renderCal();if(document.getElementById("vw-day").classList.contains("on"))_safeRenderDay()}
-        }
-      }).catch(function(){
-        _fbSyncing=false;
-        setSyncUI("err","同期エラー");
-      });
-    },function(){
-      _fbSyncing=false;
-      setSyncUI("err","同期エラー");
-    });
-  }).catch(function(){_fbSyncing=false});
+function _has(o,k){return Object.prototype.hasOwnProperty.call(o,k)}
+/* Realtime Database は null・空配列・空オブジェクトを保存しないので、
+   比較時はそれらをすべて「無し」として扱う。 */
+function _isEmpty(v){
+  if(v===null||v===undefined)return true;
+  if(typeof v==="object"){for(var k in v){if(_has(v,k)&&!_isEmpty(v[k]))return false}return true}
+  return false;
+}
+function _same(a,b){
+  var ea=_isEmpty(a),eb=_isEmpty(b);
+  if(ea||eb)return ea&&eb;
+  if(typeof a!=="object"||typeof b!=="object")return a===b;
+  var k;
+  for(k in a){if(_has(a,k)&&!_same(a[k],b[k]))return false}
+  for(k in b){if(_has(b,k)&&!_has(a,k)&&!_isEmpty(b[k]))return false}
+  return true;
+}
+function _clean(v){
+  if(_isEmpty(v))return null;
+  if(typeof v!=="object")return v;
+  return JSON.parse(JSON.stringify(v));
+}
+/* base（サーバー側の最新）と cur（ローカル）の差分を、update() 用の
+   「パス → 値」に展開する。depth 段まで掘り下げる。 */
+function _diff(base,cur,path,out,depth){
+  if(_same(base,cur))return;
+  if(depth>0&&base&&cur&&typeof base==="object"&&typeof cur==="object"){
+    var seen={},k;
+    for(k in cur){if(_has(cur,k)){seen[k]=1;_diff(base[k],cur[k],path+"/"+k,out,depth-1)}}
+    for(k in base){if(_has(base,k)&&!seen[k]&&!_isEmpty(base[k]))out[path+"/"+k]=null}
+    return;
+  }
+  out[path]=_clean(cur);
+}
+function _validId(id){return /^\d{4}-\d{2}-\d{2}$/.test(id)}
+function _normEntry(e,id){
+  e.id=id;
+  if(!e.date)e.date=id;
+  if(!e.monthDay)e.monthDay=id.substring(5);
+  if(!e.yearMonth)e.yearMonth=id.substring(0,7);
+  if(e.tasks&&typeof e.tasks==="object"){
+    var arr=[],ks,i;
+    if(Array.isArray(e.tasks)){for(i=0;i<e.tasks.length;i++){if(e.tasks[i])arr.push(e.tasks[i])}}
+    else{
+      ks=Object.keys(e.tasks).sort(function(a,b){return a-b});
+      for(i=0;i<ks.length;i++){if(e.tasks[ks[i]])arr.push(e.tasks[ks[i]])}
+    }
+    e.tasks=arr;
+  }
+  return e;
+}
+function _dirtyMap(){
+  try{return JSON.parse(localStorage.getItem("rn_sync_dirty")||"{}")||{}}catch(e){return {}}
+}
+function _markDirty(id,on){
+  try{
+    var m=_dirtyMap();
+    if(on){if(m[id])return;m[id]=1}else{if(!m[id])return;delete m[id]}
+    localStorage.setItem("rn_sync_dirty",JSON.stringify(m));
+  }catch(e){}
 }
 
 function pushToFirebase(entry){
-  if(!_fbReady||!_fbRef)return;
+  if(!_fbReady||!_fbRef||!entry||!entry.id)return;
   try{
-    /* Use update() instead of set() so that fields written by the other
-       app (e.g. re:action mobile setting training media) are preserved
-       even when this side's `entry` object doesn't carry them.
-       set() would atomically replace the whole node and wipe those
-       sibling fields — the root cause of the cross-app sync drops. */
-    _skipRemoteIds[entry.id]=true;
-    var patch={};
-    for(var k in entry){if(entry.hasOwnProperty(k))patch[k]=entry[k]}
-    _fbRef.child(entry.id).update(patch);
-  }catch(ex){}
+    var id=entry.id,cur={},patch={},k,i,n=0;
+    if(_SYNC_OWN){
+      for(i=0;i<_SYNC_OWN.length;i++){k=_SYNC_OWN[i];if(_has(entry,k))cur[k]=entry[k]}
+    }else{
+      for(k in entry){if(_has(entry,k))cur[k]=entry[k]}
+    }
+    if(_watchId===id&&_watchSeen&&_remoteDay){
+      /* 監視中の日: サーバーの最新状態との差分だけ送る */
+      for(k in cur)_diff(_remoteDay[k],cur[k],k,patch,2);
+    }else{
+      for(k in cur)patch[k]=_clean(cur[k]);
+    }
+    for(k in patch)n++;
+    if(!n)return;
+    _markDirty(id,true);
+    _pendingPush[id]=(_pendingPush[id]||0)+1;
+    _fbRef.child(id).update(patch,function(err){
+      _pendingPush[id]=Math.max(0,(_pendingPush[id]||1)-1);
+      if(!err&&!_pendingPush[id])_markDirty(id,false);
+    });
+  }catch(e){}
 }
+
+/* 表示中の日だけをリアルタイム監視する */
+function _watchDay(id){
+  if(!_fbReady||!_fbRef||!_validId(id))return;
+  if(_watchId===id)return;
+  if(_watchRef&&_watchCb){try{_watchRef.off("value",_watchCb)}catch(e){}}
+  _watchId=id;_watchSeen=false;_remoteDay=null;
+  _watchRef=_fbRef.child(id);
+  _watchCb=_watchRef.on("value",function(snap){
+    if(_watchId!==id)return;
+    _onDayValue(id,snap);
+  });
+}
+function _unwatchDay(){
+  if(_watchRef&&_watchCb){try{_watchRef.off("value",_watchCb)}catch(e){}}
+  _watchId=null;_watchRef=null;_watchCb=null;_watchSeen=false;_remoteDay=null;
+}
+function _onDayValue(id,snap){
+  var first=!_watchSeen;
+  _watchSeen=true;
+  _remoteDay=snap.val()||{};   /* 差分計算用の基準（別インスタンス） */
+  var remote=snap.val();
+  _applyQ=_applyQ.then(function(){
+    return dbGet(id).then(function(local){
+      if(!remote){
+        if(first&&local&&local.updatedAt)pushToFirebase(local);
+        return;
+      }
+      if(local&&remote.updatedAt===local.updatedAt)return; /* 自分の書き込みの反射、または同期済み */
+      if(local&&first&&local.updatedAt&&(!remote.updatedAt||local.updatedAt>remote.updatedAt)){
+        /* オフライン中のローカル変更が新しい → アップロード */
+        pushToFirebase(local);
+        return;
+      }
+      return dbPut(_normEntry(remote,id)).then(function(){_syncRefresh(id,0)});
+    });
+  }).catch(function(){});
+}
+
+function _withTimeout(p,ms){
+  return new Promise(function(ok){
+    var done=false;
+    var t=setTimeout(function(){if(!done){done=true;ok(undefined)}},ms);
+    p.then(function(v){if(!done){done=true;clearTimeout(t);ok(v)}},function(){if(!done){done=true;clearTimeout(t);ok(undefined)}});
+  });
+}
+function _onceVal(ref){
+  return _withTimeout(new Promise(function(ok,no){
+    ref.once("value",function(s){ok(s.val())},function(){no()});
+  }),20000);
+}
+/* 日付キーの一覧だけを取得（中身はダウンロードしない） */
+function _remoteKeys(){
+  if(typeof fetch!=="function")return Promise.resolve(null);
+  var url=SYNC_URL.replace(/\/+$/,"")+"/diary.json?shallow=true";
+  return _withTimeout(fetch(url,{cache:"no-store"}).then(function(r){
+    if(!r.ok)return null;
+    return r.json().then(function(j){return j||{}});
+  }),15000).then(function(v){return v===undefined?null:v});
+}
+function _runJobs(jobs,par){
+  return new Promise(function(ok){
+    var i=0,active=0;
+    function next(){
+      if(i>=jobs.length&&active===0){ok();return}
+      while(active<par&&i<jobs.length){
+        active++;
+        (function(job){
+          var p;try{p=job()}catch(e){p=null}
+          Promise.resolve(p).then(function(){active--;next()},function(){active--;next()});
+        })(jobs[i++]);
+      }
+    }
+    next();
+  });
+}
+/* 表示中以外の日の突き合わせ。updatedAt だけを比べ、必要な日だけ送受信する。
+   force=false: 直近35日＋未送信分のみ / force=true: 全日 */
+function reconcile(force){
+  if(!_fbReady||!_fbRef||_reconBusy)return Promise.resolve(null);
+  var now=Date.now();
+  if(!force&&now-_lastRecon<120000)return Promise.resolve(null);
+  _reconBusy=true;_lastRecon=now;
+  var up=0,dl=0;
+  function dlJob(id){
+    return function(){
+      return _onceVal(_fbRef.child(id)).then(function(r){
+        if(!r)return;
+        dl++;
+        return dbPut(_normEntry(r,id));
+      });
+    };
+  }
+  function cmpJob(le){
+    return function(){
+      return _onceVal(_fbRef.child(le.id+"/updatedAt")).then(function(r){
+        if(r===undefined)return; /* timeout */
+        if(!r){if(le.updatedAt){up++;pushToFirebase(le)}return}
+        if(le.updatedAt&&le.updatedAt>r){up++;pushToFirebase(le);return}
+        if(!le.updatedAt||r>le.updatedAt)return dlJob(le.id)();
+        _markDirty(le.id,false);
+      });
+    };
+  }
+  return Promise.all([dbAll(),_remoteKeys()]).then(function(res){
+    var local=res[0]||[],keys=res[1],lmap={},i,id,jobs=[];
+    for(i=0;i<local.length;i++){if(local[i]&&local[i].id)lmap[local[i].id]=local[i]}
+    if(keys===null&&local.length===0){
+      /* 新しい端末でキー一覧が取れない場合のみ、従来どおり全件取得 */
+      return _onceVal(_fbRef).then(function(all){
+        var c=Promise.resolve();
+        for(var rid in (all||{})){
+          if(!_validId(rid)||!all[rid])continue;
+          (function(e,eid){dl++;c=c.then(function(){return dbPut(_normEntry(e,eid))})})(all[rid],rid);
+        }
+        return c;
+      });
+    }
+    var cut=new Date(now-35*86400000);
+    cut=cut.getFullYear()+"-"+("0"+(cut.getMonth()+1)).slice(-2)+"-"+("0"+cut.getDate()).slice(-2);
+    var dirty=_dirtyMap();
+    for(id in lmap){
+      if(id===_watchId||!_validId(id))continue;
+      if(keys&&!keys[id]){
+        if(lmap[id].updatedAt){(function(le){jobs.push(function(){up++;pushToFirebase(le)})})(lmap[id])}
+        continue;
+      }
+      if(force||dirty[id]||id>=cut)jobs.push(cmpJob(lmap[id]));
+    }
+    if(keys){for(id in keys){if(!lmap[id]&&id!==_watchId&&_validId(id))jobs.push(dlJob(id))}}
+    return _runJobs(jobs,4);
+  }).then(function(){
+    _reconBusy=false;
+    if(dl>0)_syncRefresh(null,dl);
+    return {up:up,dl:dl};
+  },function(){
+    _reconBusy=false;
+    return null;
+  });
+}
+/* 前面復帰・回線復帰時は、切れたままの接続を待たずに即つなぎ直す */
+function _syncKick(){
+  if(!_fbDb||!_fbReady)return;
+  try{_fbDb.goOffline();_fbDb.goOnline()}catch(e){}
+}
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){_hiddenAt=Date.now();return}
+  if(_hiddenAt&&Date.now()-_hiddenAt>4000)_syncKick();
+  _hiddenAt=0;
+});
+window.addEventListener("online",function(){_syncKick()});
 
 /* ============================
    Training media (photo / video) — inline base64 in entry
@@ -3585,7 +3749,7 @@ function doSyncREST(){
 
 function doSync(){
   if(!SYNC_URL){showSyncSetup();return}
-  if(_fbReady){doFullSync()}
+  if(_fbReady){doFullSync(true)}
   else{doSyncREST()}
 }
 
@@ -3636,6 +3800,7 @@ function clearSyncUrl(){
   SYNC_URL="";
   try{localStorage.removeItem("rn_sync_url")}catch(ex){}
   // Detach Firebase listeners
+  _unwatchDay();
   if(_fbRef){try{_fbRef.off()}catch(ex){}}
   if(_fbDb){try{_fbDb.ref(".info/connected").off()}catch(ex){}}
   _fbReady=false;_fbListening=false;_fbRef=null;
