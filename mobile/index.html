@@ -122,6 +122,15 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
 .modal-btns .ok{background:var(--acc);color:#fff}
 .tst{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:2000}
 .tst.show{opacity:1}
+/* Swipe-to-delete (左→右) */
+#taskList .tk-r{touch-action:pan-y}
+.tk-r.tk-swipe{transition:none;background:var(--card);z-index:4}
+.tk-r.tk-swipe-end{transition:transform .2s ease;background:var(--card);z-index:4}
+.tk-r.tk-swipe::before,.tk-r.tk-swipe-end::before{content:"削除";position:absolute;right:100%;top:0;bottom:0;width:100vw;background:#e9b9ae;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:flex-end;padding-right:16px;box-sizing:border-box;transition:background .12s}
+.tk-r.tk-swipe-go::before{content:"指を離すと削除";background:#d64545}
+.undo{position:fixed;bottom:calc(76px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(20px);background:rgba(0,0,0,.88);color:#fff;padding:10px 10px 10px 18px;border-radius:22px;font-size:13px;display:flex;align-items:center;gap:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:2100;white-space:nowrap}
+.undo.show{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+.undo button{background:#fff;color:#3d2c1e;border:none;border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
 .setup{padding:20px;background:var(--card);border:1px solid var(--bdr);border-radius:14px;margin-top:12px;font-size:13px;line-height:1.7;color:var(--sub);display:none}
 .setup.on{display:block}
 .setup h3{font-size:15px;color:var(--text);margin-bottom:8px}
@@ -200,6 +209,7 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
 </div>
 
 <div class="tst" id="tst"></div>
+<div class="undo" id="undoBar"><span id="undoMsg">タスクを削除しました</span><button id="undoBtn">元に戻す</button></div>
 
 <script>
 var DB_NAME="RenyouNikki",DB_VER=1,STORE="entries";
@@ -346,7 +356,7 @@ function loadFirebaseSDK(cb){
 var _SYNC_OWN=["id","date","monthDay","yearMonth","_v","tasks","training","updatedAt"];
 function _safeRender(){
   /* 並び替えドラッグ中は描き直さない */
-  if(_tkDragState){setTimeout(_safeRender,400);return}
+  if(_tkDragState||_tkSwipeActive){setTimeout(_safeRender,400);return}
   render();
 }
 function _syncRefresh(id,dl){
@@ -803,12 +813,30 @@ function renderTasks(entry){
      appears at the candidate insertion point.
    - Release commits the new order to entry.tasks and pushes to Firebase. */
 var _tkDragState=null;
+/* 右スワイプ削除の最中は true（日付フリックや再描画を止める） */
+var _tkSwipeActive=false;
 function _attachTaskReorder(list){
   var rows=list.querySelectorAll(".tk-r");
   for(var i=0;i<rows.length;i++){
     (function(row,idx){
       row.setAttribute("data-row-i",idx);
       var pressTm=null,startY=0,startX=0,longPressed=false;
+      /* Swipe-to-delete state: swiping=行が指に追従中 / swipeDead=このタッチでは発動させない */
+      var swiping=false,swipeDead=false,swipeX=0,swipeNeed=0;
+      function _swipeReset(del){
+        swiping=false;
+        row.classList.remove("tk-swipe","tk-swipe-go");
+        row.classList.add("tk-swipe-end");
+        if(del){
+          row.style.transform="translateX(110%)";
+          try{if(navigator.vibrate)navigator.vibrate(10)}catch(ex){}
+          setTimeout(function(){_tkSwipeActive=false;deleteTaskAt(idx)},180);
+        }else{
+          row.style.transform="";
+          _tkSwipeActive=false;
+          setTimeout(function(){row.classList.remove("tk-swipe-end")},220);
+        }
+      }
       function _clearPress(){
         if(pressTm){clearTimeout(pressTm);pressTm=null}
         row.classList.remove("tk-pre");
@@ -818,6 +846,7 @@ function _attachTaskReorder(list){
         if(_tkDragState)return;
         startY=e.touches[0].clientY;startX=e.touches[0].clientX;
         longPressed=false;
+        swiping=false;swipeDead=false;swipeX=0;
         row.classList.add("tk-pre");
         pressTm=setTimeout(function(){
           longPressed=true;
@@ -836,14 +865,42 @@ function _attachTaskReorder(list){
         if(_tkDragState&&_tkDragState.row===row){
           e.preventDefault();
           _updateTaskDrag(e.touches[0].clientY);
+          return;
+        }
+        /* --- 左→右スワイプで削除 ---
+           行の上で右方向へ水平に動かし始めたら、行が指に付いてくる。
+           行幅の50%（最低140px）を超えて離したときだけ削除。
+           縦スクロール・左方向・並び替え中は発動しない。 */
+        if(_tkDragState||longPressed)return;
+        if(e.touches.length!==1){if(swiping)_swipeReset(false);swipeDead=true;return}
+        var sdx=e.touches[0].clientX-startX,sdy=e.touches[0].clientY-startY;
+        if(!swiping&&!swipeDead){
+          if(Math.abs(sdy)>10&&Math.abs(sdy)>=Math.abs(sdx))swipeDead=true;
+          else if(sdx<-10)swipeDead=true;
+          else if(sdx>12&&sdx>Math.abs(sdy)*1.5){
+            swiping=true;_tkSwipeActive=true;
+            _clearPress();
+            swipeNeed=Math.max(140,row.offsetWidth*0.5);
+            row.classList.remove("tk-swipe-end");
+            row.classList.add("tk-swipe");
+          }
+        }
+        if(swiping){
+          if(e.cancelable)e.preventDefault();
+          swipeX=Math.max(0,sdx);
+          row.style.transform="translateX("+swipeX+"px)";
+          if(swipeX>=swipeNeed)row.classList.add("tk-swipe-go");
+          else row.classList.remove("tk-swipe-go");
         }
       },{passive:false});
       row.addEventListener("touchend",function(){
         _clearPress();
+        if(swiping){_swipeReset(swipeX>=swipeNeed);return}
         if(_tkDragState&&_tkDragState.row===row)_endTaskDrag(false);
       });
       row.addEventListener("touchcancel",function(){
         _clearPress();
+        if(swiping){_swipeReset(false);return}
         if(_tkDragState&&_tkDragState.row===row)_endTaskDrag(true);
       });
     })(rows[i],i);
@@ -927,6 +984,52 @@ function _endTaskDrag(cancelled){
       pushToFirebase(entry);
       render();
       markCalNeedsRefresh();
+    });
+  });
+}
+
+/* ===== スワイプ削除と「元に戻す」 ===== */
+var _undoInfo=null,_undoTm=null;
+function deleteTaskAt(idx){
+  ensureEntry().then(function(entry){
+    if(!entry.tasks||!entry.tasks[idx]){render();return}
+    var removed=entry.tasks.splice(idx,1)[0];
+    entry.updatedAt=new Date().toISOString();
+    dbPut(entry).then(function(){
+      pushToFirebase(entry);
+      render();
+      markCalNeedsRefresh();
+      _showUndo({day:entry.id,idx:idx,task:removed});
+    });
+  });
+}
+function _showUndo(info){
+  _undoInfo=info;
+  var bar=document.getElementById("undoBar");
+  bar.classList.add("show");
+  if(_undoTm)clearTimeout(_undoTm);
+  _undoTm=setTimeout(_hideUndo,5000);
+}
+function _hideUndo(){
+  _undoInfo=null;
+  if(_undoTm){clearTimeout(_undoTm);_undoTm=null}
+  document.getElementById("undoBar").classList.remove("show");
+}
+function undoDelete(){
+  var u=_undoInfo;
+  _hideUndo();
+  if(!u)return;
+  dbGet(u.day).then(function(entry){
+    if(!entry)return;
+    if(!entry.tasks)entry.tasks=[];
+    var at=Math.min(u.idx,entry.tasks.length);
+    entry.tasks.splice(at,0,u.task);
+    entry.updatedAt=new Date().toISOString();
+    dbPut(entry).then(function(){
+      pushToFirebase(entry);
+      if(fmt(sel)===u.day)render();
+      markCalNeedsRefresh();
+      toast("タスクを元に戻しました");
     });
   });
 }
@@ -1423,6 +1526,8 @@ document.getElementById("trMediaInput").addEventListener("change",function(e){
   this.value="";
 });
 
+document.getElementById("undoBtn").addEventListener("click",function(){undoDelete()});
+
 document.getElementById("syncSave").addEventListener("click",function(){
   var v=document.getElementById("syncUrlInput").value.trim();
   if(!v){toast("URLを入力してください");return}
@@ -1458,7 +1563,7 @@ document.getElementById("syncSave").addEventListener("click",function(){
   },{passive:true,capture:true});
   document.addEventListener("touchmove",function(e){
     if(!active)return;
-    if(e.touches.length!==1||_tkDragState){active=false;return}
+    if(e.touches.length!==1||_tkDragState||_tkSwipeActive){active=false;return}
     var dy=Math.abs(e.touches[0].clientY-sy);
     if(dy>maxDy)maxDy=dy;
     if(maxDy>60)active=false; /* 縦スクロールとみなす */
@@ -1467,7 +1572,7 @@ document.getElementById("syncSave").addEventListener("click",function(){
   document.addEventListener("touchend",function(e){
     if(!active)return;
     active=false;
-    if(e.touches.length>0||_tkDragState)return;
+    if(e.touches.length>0||_tkDragState||_tkSwipeActive)return;
     var ct=e.changedTouches[0];
     if(!ct)return;
     var dx=ct.clientX-sx,dy=ct.clientY-sy,ax=Math.abs(dx),dt=Date.now()-st;
