@@ -21,6 +21,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku
 .app{max-width:480px;margin:0 auto;padding:0 12px 80px}
 .hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 4px}
 .hdr h1{font-size:19px;font-weight:700;color:var(--acc);letter-spacing:-0.02em}
+.hdr h1 .ver{font-size:10px;font-weight:500;color:var(--sub);letter-spacing:0;margin-left:6px}
 .sync{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:6px}
 .sdot{width:8px;height:8px;border-radius:50%;background:#ccc}
 .sdot.ok{background:#16a34a}.sdot.err{background:#ef4444}
@@ -128,6 +129,42 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
 .tk-r.tk-swipe-end{transition:transform .2s ease;background:var(--card);z-index:4}
 .tk-r.tk-swipe::before,.tk-r.tk-swipe-end::before{content:"削除";position:absolute;right:100%;top:0;bottom:0;width:100vw;background:#e9b9ae;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:flex-end;padding-right:16px;box-sizing:border-box;transition:background .12s}
 .tk-r.tk-swipe-go::before{content:"指を離すと削除";background:#d64545}
+/* AIトレーナー */
+.mood-b{padding:12px 14px}
+.mood-b textarea{width:100%;min-height:58px;padding:10px 11px;border:1px solid var(--bdr);border-radius:8px;font-size:15px;font-family:inherit;resize:none;outline:none;background:var(--bg);color:var(--text);line-height:1.5}
+.mood-b textarea:focus{border-color:var(--acc)}
+.mood-b .reco-btn{margin-top:8px;width:100%;padding:10px}
+.card-h .lnk{background:none;border:none;font-size:12px;color:var(--sub);font-family:inherit;cursor:pointer;padding:4px 2px}
+.reco-b{padding:12px 14px}
+.reco-msg{text-align:center;color:var(--sub);font-size:13px;line-height:1.7;padding:10px 0}
+.reco-msg .reco-btn{margin-top:10px}
+.reco-err{background:#fdecec;color:#b33a3a;border-radius:8px;padding:9px 11px;font-size:12.5px;line-height:1.5;margin-bottom:10px}
+.reco-spin{width:22px;height:22px;border:2.5px solid var(--bdr);border-top-color:var(--acc);border-radius:50%;margin:4px auto 10px;animation:recospin .8s linear infinite}
+@keyframes recospin{to{transform:rotate(360deg)}}
+.reco-focus{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px}
+.reco-cmt{font-size:13px;color:var(--text);line-height:1.6;margin-bottom:10px}
+.reco-it{border:1px solid var(--bdr);border-radius:10px;padding:10px 11px;margin-top:8px;background:var(--bg)}
+.reco-it-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px}
+.reco-tg{font-size:12px;font-weight:700;color:var(--acc);background:var(--acc-lt);border-radius:6px;padding:3px 8px;white-space:nowrap}
+.reco-acts{display:flex;gap:6px;flex-shrink:0}
+.reco-menu{font-size:14px;color:var(--text);line-height:1.55;white-space:pre-wrap;word-wrap:break-word}
+.reco-why{font-size:12px;color:var(--sub);line-height:1.5;margin-top:6px}
+.reco-btn{border:1px solid var(--bdr);background:var(--card);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap}
+.reco-btn.pr{background:var(--acc);border-color:var(--acc);color:#fff}
+.reco-btn.done,.reco-btn:disabled{opacity:.55}
+.reco-foot{display:flex;gap:8px;margin-top:12px}
+.reco-foot .reco-btn{flex:1;padding:10px}
+.reco-wod{margin-top:10px;font-size:12px;color:var(--sub)}
+.reco-wod summary{cursor:pointer;font-weight:600}
+.reco-wodraw{white-space:pre-wrap;word-wrap:break-word;background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:6px;color:var(--text);font-size:12px;line-height:1.5}
+.reco-note{font-size:10.5px;color:var(--sub);margin-top:8px;line-height:1.5}
+.ai-f{display:block;font-size:12px;font-weight:600;color:var(--sub);margin:12px 0 4px}
+.ai-in{width:100%;padding:10px;border:1px solid var(--bdr);border-radius:8px;font-size:15px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
+.ai-steps{font-size:12px;color:var(--sub);line-height:1.7;margin:8px 0 0 18px}
+.ai-steps a{color:var(--acc)}
+.ai-chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-top:12px}
+.ai-chk input{width:20px;height:20px;accent-color:var(--acc)}
+#aiModal .modal-c{max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .undo{position:fixed;bottom:calc(76px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(20px);background:rgba(0,0,0,.88);color:#fff;padding:10px 10px 10px 18px;border-radius:22px;font-size:13px;display:flex;align-items:center;gap:12px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:2100;white-space:nowrap}
 .undo.show{opacity:1;pointer-events:auto;transform:translateX(-50%)}
 .undo button{background:#fff;color:#3d2c1e;border:none;border-radius:16px;padding:8px 14px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer}
@@ -141,7 +178,7 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
 <body>
 <div class="app">
   <header class="hdr">
-    <h1>re:action</h1>
+    <h1>re:action<span class="ver" id="ver"></span></h1>
     <div class="sync"><span class="sdot off" id="sdot"></span><span id="stat">準備中</span></div>
   </header>
 
@@ -174,8 +211,21 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
   </div>
 
   <div class="card">
+    <div class="card-h"><h2>💬 今日の気分は？</h2></div>
+    <div class="mood-b">
+      <textarea id="moodInput" placeholder="例：脚を追い込みたい／疲れ気味なので軽めに／ジムのWODを貼り付けてもOK"></textarea>
+      <button class="reco-btn pr" id="moodGo">この気分でおすすめを作成</button>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="card-h"><h2>💪 Training</h2><span class="cnt" id="trCnt"></span></div>
     <div id="trList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2 id="recoTitle">🤖 本日のおすすめメニュー</h2><button class="lnk" id="aiOpen">⚙ AI設定</button></div>
+    <div class="reco-b" id="recoBody"></div>
   </div>
 </div>
 
@@ -208,10 +258,74 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
   </div>
 </div>
 
+<div class="modal" id="aiModal">
+  <div class="modal-c">
+    <h3>AI設定（Google Gemini・無料枠）</h3>
+    <label class="ai-f" style="margin-top:0">Gemini APIキー</label>
+    <input class="ai-in" type="password" id="aiKey" placeholder="AIza…" autocomplete="off">
+    <ol class="ai-steps"><li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> を開き Google アカウントでログイン</li><li>「APIキーを作成」を押してキーをコピー</li><li>上の欄に貼り付け（支払い情報の登録は不要。れいぞうこ番と同じキーも使えます）</li></ol>
+    <label class="ai-f">おすすめ作成に使うモデル</label>
+    <input class="ai-in" type="text" id="aiModel" list="aiModels" autocomplete="off">
+    <datalist id="aiModels"><option>gemini-3.5-flash-lite</option><option>gemini-3.8-flash</option><option>gemini-3.1-flash-lite</option><option>gemini-2.5-flash</option></datalist>
+    <label class="ai-chk"><input type="checkbox" id="aiUseWod"> CrossFit公式のWODを検索して参考にする</label>
+    <label class="ai-f">WOD検索に使うモデル（無料でGoogle検索が使えるもの）</label>
+    <input class="ai-in" type="text" id="aiWodModel" list="aiWodModels" autocomplete="off">
+    <datalist id="aiWodModels"><option>gemini-2.5-flash</option><option>gemini-2.5-flash-lite</option></datalist>
+    <label class="ai-chk"><input type="checkbox" id="aiAuto"> その日に初めて開いたとき、おすすめを自動で作る</label>
+    <div class="reco-note">キーはこの端末だけに保存され、Google 以外には送信されません。おすすめ作成時に、トレーニング記録と「今日の気分」が Google に送信されます。無料枠は1日の回数に上限があり、送信内容が Google のサービス改善に使われることがあります。</div>
+    <div class="modal-btns">
+      <button class="cancel" id="aiTest">接続テスト</button>
+      <button class="cancel" id="aiCancel">閉じる</button>
+      <button class="ok" id="aiSave">保存</button>
+    </div>
+    <div id="aiTestRes" style="font-size:12px;text-align:center;min-height:18px;margin-top:8px"></div>
+  </div>
+</div>
+
 <div class="tst" id="tst"></div>
 <div class="undo" id="undoBar"><span id="undoMsg">タスクを削除しました</span><button id="undoBtn">元に戻す</button></div>
 
 <script>
+/* ===== バージョン表示と自動更新 =====
+   ホーム画面のWebアプリは古いページを保持し続けるため、起動時と前面復帰時に
+   サーバー上の最新版を確認し、違っていれば自動で読み込み直す。 */
+var APP_VERSION="2026.11.12d";
+(function(){
+  var v=document.getElementById("ver");if(v)v.textContent="v"+APP_VERSION;
+  var pending=null,lastChk=0;
+  function busy(){
+    if(document.querySelector(".modal.on"))return true;
+    if(document.querySelector(".media-viewer"))return true;
+    if(typeof _tkDragState!=="undefined"&&_tkDragState)return true;
+    if(typeof _tkSwipeActive!=="undefined"&&_tkSwipeActive)return true;
+    if(typeof _undoInfo!=="undefined"&&_undoInfo)return true;
+    return false;
+  }
+  function apply(){
+    if(!pending)return;
+    if(busy()){setTimeout(apply,3000);return}
+    try{
+      if(sessionStorage.getItem("rn_upd_tried")===pending)return; /* ループ防止 */
+      sessionStorage.setItem("rn_upd_tried",pending);
+    }catch(e){}
+    location.replace(location.pathname+"?v="+encodeURIComponent(pending));
+  }
+  function check(){
+    if(typeof fetch!=="function"||pending)return;
+    if(Date.now()-lastChk<60000)return;
+    lastChk=Date.now();
+    fetch(location.pathname+"?_="+Date.now(),{cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(t){
+      if(!t)return;
+      var m=t.match(/var APP_VERSION="([^"]+)"/);
+      if(!m||m[1]===APP_VERSION)return;
+      pending=m[1];apply();
+    }).catch(function(){});
+  }
+  setTimeout(check,2500);
+  document.addEventListener("visibilitychange",function(){if(!document.hidden)check()});
+  window.addEventListener("pageshow",function(){check()});
+})();
+
 var DB_NAME="RenyouNikki",DB_VER=1,STORE="entries";
 var _idb=null,_idbOk=null,_mem={};
 function _memLoad(){try{var d=localStorage.getItem("rn_data");if(d)_mem=JSON.parse(d)}catch(e){}}
@@ -353,7 +467,7 @@ function loadFirebaseSDK(cb){
   document.head.appendChild(s1);
 }
 
-var _SYNC_OWN=["id","date","monthDay","yearMonth","_v","tasks","training","updatedAt"];
+var _SYNC_OWN=["id","date","monthDay","yearMonth","_v","tasks","training","mood","reco","updatedAt"];
 function _safeRender(){
   /* 並び替えドラッグ中は描き直さない */
   if(_tkDragState||_tkSwipeActive){setTimeout(_safeRender,400);return}
@@ -753,7 +867,9 @@ function render(){
   dbGet(ds).then(function(entry){
     entry=entry||{};
     renderTasks(entry);
+    renderMood(entry);
     renderTraining(entry);
+    renderReco(entry);
   });
 }
 
@@ -875,9 +991,13 @@ function _attachTaskReorder(list){
         if(e.touches.length!==1){if(swiping)_swipeReset(false);swipeDead=true;return}
         var sdx=e.touches[0].clientX-startX,sdy=e.touches[0].clientY-startY;
         if(!swiping&&!swipeDead){
-          if(Math.abs(sdy)>10&&Math.abs(sdy)>=Math.abs(sdx))swipeDead=true;
-          else if(sdx<-10)swipeDead=true;
-          else if(sdx>12&&sdx>Math.abs(sdy)*1.5){
+          /* 指の動きは最初ぶれやすいので、10px動いた時点の向きで判定し、
+             斜め（判定しづらい）ときは24pxまで様子を見る */
+          var sax=Math.abs(sdx),say=Math.abs(sdy);
+          if(sdx<-10&&sax>=say)swipeDead=true;
+          else if(say>10&&say>sax*1.1)swipeDead=true;
+          else if(sax>24||say>24){if(!(sdx>0&&sdx>=say*1.1))swipeDead=true}
+          if(!swipeDead&&sdx>10&&sdx>=say*1.1){
             swiping=true;_tkSwipeActive=true;
             _clearPress();
             swipeNeed=Math.max(140,row.offsetWidth*0.5);
@@ -1526,6 +1646,424 @@ document.getElementById("trMediaInput").addEventListener("change",function(e){
   this.value="";
 });
 
+/* ============================================================
+   AIパーソナルトレーナー（Google Gemini・無料枠）
+   ------------------------------------------------------------
+   - 「今日の気分は？」: entry.mood に保存
+   - 「本日のおすすめメニュー」: entry.reco に保存
+   - APIキーはこの端末の localStorage のみ（Firebase には送らない）
+   - 1回の作成で最大2リクエスト:
+       (1) 公式WODの検索（Google検索グラウンディング対応モデル）
+       (2) おすすめメニューの生成（JSON）
+   ============================================================ */
+var AI_DEF={apiKey:"",model:"gemini-3.5-flash-lite",wodModel:"gemini-2.5-flash",useWod:true,auto:true};
+var TR_TARGETS={
+  muscle_legs:"脚",muscle_chest:"胸",muscle_shoulder:"肩",muscle_back:"背中",muscle_arms:"腕",
+  running_distance:"ランニング 距離",running_time:"ランニング 時間",running_pace:"ランニング ペース",
+  crossfit_menu:"クロスフィット",other_content:"その他"
+};
+var TR_ORDER=["muscle_legs","muscle_chest","muscle_shoulder","muscle_back","muscle_arms","running_distance","running_time","running_pace","crossfit_menu","other_content"];
+var _aiBusy=false,_aiErr="",_aiStage="",_moodTm=null;
+
+function aiSettings(){
+  var s={},k;
+  try{s=JSON.parse(localStorage.getItem("rn_ai")||"{}")||{}}catch(e){s={}}
+  for(k in AI_DEF){if(!Object.prototype.hasOwnProperty.call(s,k))s[k]=AI_DEF[k]}
+  return s;
+}
+function aiSaveSettings(s){try{localStorage.setItem("rn_ai",JSON.stringify(s))}catch(e){}}
+function _todayStr(){var t=new Date();t.setHours(0,0,0,0);return fmt(t)}
+
+/* --- Gemini 呼び出し（れいぞうこ番と同じ方式） --- */
+function geminiCall(model,body){
+  var s=aiSettings();
+  if(!s.apiKey)return Promise.reject(new Error("AI設定で Gemini APIキーを登録してください"));
+  return fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-goog-api-key":s.apiKey},
+    body:JSON.stringify(body)
+  }).then(function(r){
+    if(r.ok)return r.json();
+    return r.json().then(function(j){return (j&&j.error&&j.error.message)||""},function(){return ""}).then(function(m){
+      if(r.status===429)throw new Error("無料枠の上限に達しました。少し待つか、明日もう一度お試しください");
+      if(r.status===404)throw new Error("モデル「"+model+"」が見つかりません。AI設定でモデル名を変更してください");
+      if(r.status===400||r.status===401||r.status===403)throw new Error("APIキーが正しくないか、利用できません（"+String(m).slice(0,80)+"）");
+      throw new Error("AIの応答エラー（"+r.status+"）");
+    });
+  },function(){throw new Error("通信できませんでした。電波の状態を確認してください")}).then(function(j){
+    var parts=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[];
+    var txt="";
+    for(var i=0;i<parts.length;i++){if(parts[i].text&&!parts[i].thought)txt+=parts[i].text}
+    return txt;
+  });
+}
+function geminiJSON(model,prompt,temp){
+  return geminiCall(model,{contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json",temperature:temp==null?0.6:temp}}).then(function(txt){
+    try{return JSON.parse(txt.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g,""))}
+    catch(e){throw new Error("AIの返答を読み取れませんでした。もう一度お試しください")}
+  });
+}
+
+/* --- 公式WOD（1日1回だけ検索し、端末内にキャッシュ） --- */
+function fetchOfficialWod(dayStr){
+  var s=aiSettings();
+  if(!s.useWod)return Promise.resolve(null);
+  var ck="rn_wod_"+dayStr;
+  try{var c=localStorage.getItem(ck);if(c!==null)return Promise.resolve(c||null)}catch(e){}
+  var p="CrossFit公式サイト(crossfit.com)の Workout of the Day を検索してください。対象は "+dayStr+"（日本時間）の時点で公開されている最新のWODです。\n"+
+    "ワークアウトの内容（形式・種目・回数・重量・時間、Rxとスケール案があればそれも）だけを、日付を先頭に付けて簡潔に書いてください。\n"+
+    "前置きや感想は不要です。確認できなかった場合は NOT_FOUND とだけ返してください。";
+  return geminiCall(s.wodModel,{contents:[{role:"user",parts:[{text:p}]}],tools:[{google_search:{}}],generationConfig:{temperature:0}}).then(function(txt){
+    txt=(txt||"").trim();
+    if(!txt||/NOT_FOUND/.test(txt))txt="";
+    if(txt.length>1500)txt=txt.substring(0,1500);
+    try{
+      localStorage.setItem(ck,txt);
+      /* 古いキャッシュを掃除 */
+      for(var i=localStorage.length-1;i>=0;i--){var k=localStorage.key(i);if(k&&k.indexOf("rn_wod_")===0&&k!==ck)localStorage.removeItem(k)}
+    }catch(e){}
+    return txt||null;
+  }).catch(function(){return null}); /* 取得できなくてもおすすめ作成は続ける */
+}
+
+/* --- 過去の記録を文章化 --- */
+function _trLine(tr,id){
+  var d=tr[id];if(!d)return "";
+  var bits=[];
+  if(d.text)bits.push(String(d.text).replace(/\s*\n\s*/g," / "));
+  else if(d.drawing)bits.push("(手書きメモあり・内容不明)");
+  if(d.done)bits.push("[実施済]");
+  return bits.join(" ");
+}
+function buildHistory(all,dayStr){
+  var rows=[],i,e;
+  for(i=0;i<all.length;i++){
+    e=all[i];
+    if(!e||!e.id||e.id>=dayStr||!e.training)continue;
+    var tr=e.training,lines=[],k,v;
+    for(var j=0;j<TR_ORDER.length;j++){
+      k=TR_ORDER[j];v=_trLine(tr,k);
+      if(v)lines.push(TR_TARGETS[k]+": "+v);
+    }
+    var par=["running","crossfit","other"],pn={running:"ランニング",crossfit:"クロスフィット",other:"その他"};
+    for(j=0;j<par.length;j++){if(tr[par[j]]&&tr[par[j]].done)lines.push(pn[par[j]]+": [実施済]")}
+    if(lines.length===0)continue;
+    var dt=new Date(e.id+"T00:00:00");
+    rows.push({id:e.id,cf:!!(tr.crossfit_menu&&tr.crossfit_menu.text),txt:e.id+"("+WD[dt.getDay()]+")"+(e.mood?" 気分:"+String(e.mood).replace(/\s+/g," ").slice(0,60):"")+"\n  "+lines.join("\n  ")});
+  }
+  rows.sort(function(a,b){return a.id<b.id?1:-1});
+  var recent=[],cfOld=[],total=0;
+  for(i=0;i<rows.length;i++){
+    if(recent.length<30&&total<7000){recent.push(rows[i].txt);total+=rows[i].txt.length}
+    else if(rows[i].cf&&cfOld.length<15){cfOld.push(rows[i].txt)}
+  }
+  return {recent:recent.reverse().join("\n"),cfOld:cfOld.reverse().join("\n"),count:rows.length};
+}
+function buildPrompt(dayStr,mood,hist,wod,todayEntry){
+  var dt=new Date(dayStr+"T00:00:00");
+  var already=[];
+  if(todayEntry&&todayEntry.training){
+    for(var j=0;j<TR_ORDER.length;j++){var v=_trLine(todayEntry.training,TR_ORDER[j]);if(v)already.push(TR_TARGETS[TR_ORDER[j]]+": "+v)}
+  }
+  return "あなたは私専属のパーソナルトレーナーです。私のトレーニング記録を読み込み、今日のおすすめメニューを日本語で提案してください。\n\n"+
+  "# 今日\n"+dayStr+"("+WD[dt.getDay()]+")\n\n"+
+  "# 今日の気分・リクエスト\n"+(mood?mood:"（未入力。記録から最適な内容を判断してください）")+"\n\n"+
+  "# 今日すでに記録済みの内容\n"+(already.length?already.join("\n"):"（なし）")+"\n\n"+
+  "# 直近のトレーニング記録（古い順）\n"+(hist.recent||"（まだ記録がありません）")+"\n\n"+
+  (hist.cfOld?"# それ以前のクロスフィット記録\n"+hist.cfOld+"\n\n":"")+
+  "# CrossFit公式の直近のWOD（検索で取得。誤りを含む可能性あり）\n"+(wod||"（取得できませんでした）")+"\n\n"+
+  "# 考え方\n"+
+  "- 記録にある種目・重量・レップ数・セット数を踏まえ、前回から無理のない範囲で少しだけ負荷を進める（漸進性過負荷）。根拠にした過去の記録の日付と数値を reason に書く。\n"+
+  "- 直近で追い込んだ部位は連続させず、間隔が空いている部位を優先する。連日続いている場合は軽め・休養も提案する。\n"+
+  "- 「今日の気分・リクエスト」を最優先で反映する。そこにWODなどが貼られていれば、それも材料にする。\n"+
+  "- クロスフィットは、公式WODと私の過去のクロスフィット記録の傾向を分析し、私のレベルに合わせて重量や回数を調整した版を提案する。\n"+
+  "- 記録が少ない・無い場合は、一般的で安全な基本メニューにし、その旨を comment に書く。重量が不明な種目は「軽め」「RPE7」などで表す。\n"+
+  "- 痛みや体調不良が書かれていたら、その部位を避けるか休養を勧める。\n"+
+  "- 今日やる分だけに絞る（2〜5項目）。全部位を埋めない。\n\n"+
+  "# 出力（このJSONだけを返す）\n"+
+  "{\n"+
+  ' "focus":"今日のテーマ（20文字以内）",\n'+
+  ' "comment":"トレーナーからの一言。記録を見て気づいたことを含めて2〜3文",\n'+
+  ' "items":[{"target":"記入欄ID","menu":"記入欄にそのまま貼れるメニュー。1行1種目で「種目 重量 × 回数 × セット」の形。3〜6行","reason":"この内容にした理由（1〜2文）"}],\n'+
+  ' "wod_note":"公式WODの要点と、私向けにどう調整したか（1〜2文。WODが無ければ空文字）"\n'+
+  "}\n"+
+  "target は次のIDのどれか: muscle_legs(脚), muscle_chest(胸), muscle_shoulder(肩), muscle_back(背中), muscle_arms(腕), running_distance(ランニングの距離。例 5km), running_time(ランニングの時間。例 30分), running_pace(ランニングのペース。例 6:00/km), crossfit_menu(クロスフィットのメニュー), other_content(その他。ストレッチ等)。\n"+
+  "同じ target を2回使わない。ランニングを勧める場合は running_distance / running_time / running_pace を別々の項目にし、menu は短い値だけにする。";
+}
+function _normReco(j,meta){
+  var items=[],seen={},src=(j&&j.items)||[];
+  if(!Array.isArray(src))src=[];
+  for(var i=0;i<src.length&&items.length<8;i++){
+    var it=src[i]||{},t=String(it.target||"");
+    if(!TR_TARGETS[t])t="other_content";
+    var menu=String(it.menu||"").replace(/\r/g,"").trim();
+    if(!menu||seen[t])continue;
+    seen[t]=1;
+    items.push({target:t,menu:menu.slice(0,600),reason:String(it.reason||"").trim().slice(0,300)});
+  }
+  if(items.length===0)throw new Error("AIの返答にメニューが含まれていませんでした。もう一度お試しください");
+  items.sort(function(a,b){return TR_ORDER.indexOf(a.target)-TR_ORDER.indexOf(b.target)});
+  return {at:new Date().toISOString(),model:meta.model,mood:meta.mood||"",focus:String((j&&j.focus)||"").slice(0,40),comment:String((j&&j.comment)||"").slice(0,500),
+    items:items,wodNote:String((j&&j.wod_note)||"").slice(0,400),wod:meta.wod||""};
+}
+
+/* --- 作成 --- */
+function generateReco(isAuto){
+  if(_aiBusy)return;
+  var s=aiSettings(),dayStr=fmt(sel);
+  if(!s.apiKey){openAiSettings();return}
+  _aiBusy=true;_aiErr="";_aiStage=s.useWod?"公式WODを確認しています…":"記録を分析しています…";
+  if(dayStr===_todayStr()){try{localStorage.setItem("rn_ai_auto_day",dayStr)}catch(e){}}
+  render();
+  var moodEl=document.getElementById("moodInput");
+  var moodNow=moodEl?moodEl.value.trim():"";
+  _saveMood(dayStr,moodNow).then(function(){
+    return fetchOfficialWod(dayStr);
+  }).then(function(wod){
+    _aiStage="記録を分析してメニューを作成しています…";_updateRecoStage();
+    return Promise.all([dbAll(),dbGet(dayStr)]).then(function(r){
+      var hist=buildHistory(r[0]||[],dayStr);
+      return geminiJSON(s.model,buildPrompt(dayStr,moodNow,hist,wod,r[1])).then(function(j){
+        return _normReco(j,{model:s.model,mood:moodNow,wod:wod});
+      });
+    });
+  }).then(function(reco){
+    return dbGet(dayStr).then(function(entry){
+      entry=entry||{id:dayStr,date:dayStr,monthDay:dayStr.substring(5),yearMonth:dayStr.substring(0,7),_v:2};
+      entry.reco=reco;
+      entry.updatedAt=new Date().toISOString();
+      return dbPut(entry).then(function(){pushToFirebase(entry)});
+    });
+  }).then(function(){
+    _aiBusy=false;_aiErr="";
+    render();
+    if(!isAuto)toast("おすすめメニューを作成しました");
+  },function(err){
+    _aiBusy=false;_aiErr=(err&&err.message)||"作成に失敗しました";
+    render();
+  });
+}
+/* その日に初めて開いたとき、今日の分を1回だけ自動作成する */
+function maybeAutoReco(){
+  var s=aiSettings();
+  if(!s.apiKey||!s.auto||_aiBusy)return;
+  var today=_todayStr();
+  if(fmt(sel)!==today)return;
+  try{if(localStorage.getItem("rn_ai_auto_day")===today)return}catch(e){return}
+  if(document.querySelector(".modal.on"))return;
+  dbGet(today).then(function(entry){
+    if(entry&&entry.reco&&entry.reco.items){try{localStorage.setItem("rn_ai_auto_day",today)}catch(e){}return}
+    generateReco(true);
+  });
+}
+
+/* --- 今日の気分 --- */
+function _saveMood(dayStr,val){
+  return dbGet(dayStr).then(function(entry){
+    var cur=(entry&&entry.mood)||"";
+    if(cur===val)return;
+    entry=entry||{id:dayStr,date:dayStr,monthDay:dayStr.substring(5),yearMonth:dayStr.substring(0,7),_v:2};
+    entry.mood=val||null;
+    entry.updatedAt=new Date().toISOString();
+    return dbPut(entry).then(function(){pushToFirebase(entry)});
+  });
+}
+function renderMood(entry){
+  var el=document.getElementById("moodInput");
+  if(!el)return;
+  el.setAttribute("data-day",fmt(sel));
+  if(document.activeElement!==el)el.value=(entry&&entry.mood)||"";
+  var btn=document.getElementById("moodGo");
+  var canGen=fmt(sel)>=_todayStr();
+  btn.style.display=canGen?"":"none";
+  btn.disabled=_aiBusy;
+  btn.textContent=_aiBusy?"作成中…":((entry&&entry.reco&&entry.reco.items)?"この気分でおすすめを作り直す":"この気分でおすすめを作成");
+}
+
+/* --- 本日のおすすめメニュー --- */
+function _updateRecoStage(){var e=document.getElementById("recoStage");if(e)e.textContent=_aiStage}
+function renderReco(entry){
+  var box=document.getElementById("recoBody");
+  if(!box)return;
+  var s=aiSettings(),dayStr=fmt(sel),today=_todayStr(),h="";
+  var reco=entry&&entry.reco&&entry.reco.items?entry.reco:null;
+  document.getElementById("recoTitle").textContent=dayStr===today?"🤖 本日のおすすめメニュー":"🤖 この日のおすすめメニュー";
+  if(_aiBusy){
+    box.innerHTML='<div class="reco-msg"><div class="reco-spin"></div><div id="recoStage">'+escapeHtml(_aiStage)+'</div></div>';
+    return;
+  }
+  if(_aiErr)h+='<div class="reco-err">'+escapeHtml(_aiErr)+'</div>';
+  if(!reco){
+    if(!s.apiKey){
+      h+='<div class="reco-msg">AIトレーナーを使うには、無料の Gemini APIキーを設定してください。<br><button class="reco-btn pr" data-act="settings">AI設定を開く</button></div>';
+    }else if(dayStr<today){
+      h+='<div class="reco-msg">この日のおすすめはありません</div>';
+    }else{
+      h+='<div class="reco-msg">過去の記録と「今日の気分」から、今日のメニューを提案します。<br><button class="reco-btn pr" data-act="gen">おすすめを作成</button></div>';
+    }
+    box.innerHTML=h;_bindReco(box);return;
+  }
+  var tr=(entry&&entry.training)||{};
+  if(reco.focus)h+='<div class="reco-focus">'+escapeHtml(reco.focus)+'</div>';
+  if(reco.comment)h+='<div class="reco-cmt">'+escapeHtml(reco.comment)+'</div>';
+  for(var i=0;i<reco.items.length;i++){
+    var it=reco.items[i],cur=(tr[it.target]&&tr[it.target].text)||"";
+    var done=cur.indexOf(it.menu)!==-1;
+    h+='<div class="reco-it">';
+    h+='<div class="reco-it-h"><span class="reco-tg">'+escapeHtml(TR_TARGETS[it.target]||"その他")+'</span>';
+    h+='<span class="reco-acts"><button class="reco-btn" data-act="copy" data-i="'+i+'">コピー</button>';
+    h+='<button class="reco-btn pr'+(done?" done":"")+'" data-act="apply" data-i="'+i+'"'+(done?" disabled":"")+'>'+(done?"転記済み ✓":"記入欄に転記")+'</button></span></div>';
+    h+='<div class="reco-menu">'+escapeHtml(it.menu)+'</div>';
+    if(it.reason)h+='<div class="reco-why">'+escapeHtml(it.reason)+'</div>';
+    h+='</div>';
+  }
+  if(reco.wodNote||reco.wod){
+    h+='<details class="reco-wod"><summary>CrossFit公式WODについて</summary>';
+    if(reco.wodNote)h+='<div class="reco-why" style="margin-top:6px">'+escapeHtml(reco.wodNote)+'</div>';
+    if(reco.wod)h+='<div class="reco-wodraw">'+escapeHtml(reco.wod)+'</div><div class="reco-note">AIが検索で取得した内容です。正確でない場合があります。</div>';
+    h+='</details>';
+  }
+  h+='<div class="reco-foot">';
+  if(reco.items.length>1)h+='<button class="reco-btn pr" data-act="applyAll">すべて記入欄に転記</button>';
+  if(dayStr>=today)h+='<button class="reco-btn" data-act="gen">作り直す</button>';
+  h+='</div>';
+  var at=new Date(reco.at);
+  h+='<div class="reco-note">'+(isNaN(at)?"":(at.getMonth()+1)+"/"+at.getDate()+" "+p2(at.getHours())+":"+p2(at.getMinutes())+" 作成・")+'AIの提案です。体調に合わせて無理のない範囲で行ってください。</div>';
+  box.innerHTML=h;_bindReco(box);
+}
+function _bindReco(box){
+  var bs=box.querySelectorAll("button[data-act]");
+  for(var i=0;i<bs.length;i++){
+    bs[i].addEventListener("click",function(){
+      var act=this.getAttribute("data-act"),idx=parseInt(this.getAttribute("data-i"));
+      if(act==="settings")openAiSettings();
+      else if(act==="gen")generateReco(false);
+      else if(act==="apply")applyReco([idx]);
+      else if(act==="applyAll")applyReco(null);
+      else if(act==="copy")copyReco(idx,this);
+    });
+  }
+}
+/* おすすめを Training の記入欄へ転記（既に書いてある場合は下に追記） */
+function applyReco(idxs){
+  ensureEntry().then(function(entry){
+    var reco=entry.reco;
+    if(!reco||!reco.items)return;
+    if(!entry.training)entry.training={};
+    var n=0,i;
+    if(!idxs){idxs=[];for(i=0;i<reco.items.length;i++)idxs.push(i)}
+    for(i=0;i<idxs.length;i++){
+      var it=reco.items[idxs[i]];
+      if(!it||!TR_TARGETS[it.target])continue;
+      if(!entry.training[it.target])entry.training[it.target]={};
+      var cur=entry.training[it.target].text||"";
+      if(cur.indexOf(it.menu)!==-1)continue;
+      entry.training[it.target].text=cur?cur.replace(/\s+$/,"")+"\n"+it.menu:it.menu;
+      n++;
+    }
+    if(n===0){toast("すでに転記済みです");return}
+    entry.updatedAt=new Date().toISOString();
+    dbPut(entry).then(function(){
+      pushToFirebase(entry);
+      render();
+      markCalNeedsRefresh();
+      toast(n>1?n+"件を記入欄に転記しました":"記入欄に転記しました");
+    });
+  });
+}
+function copyReco(idx,btn){
+  ensureEntry().then(function(entry){
+    var it=entry.reco&&entry.reco.items&&entry.reco.items[idx];
+    if(!it)return;
+    function ok(){toast("コピーしました")}
+    function fallback(){
+      try{
+        var ta=document.createElement("textarea");
+        ta.value=it.menu;ta.style.position="fixed";ta.style.opacity="0";
+        document.body.appendChild(ta);ta.select();
+        var r=document.execCommand("copy");
+        document.body.removeChild(ta);
+        if(r)ok();else toast("コピーできませんでした");
+      }catch(e){toast("コピーできませんでした")}
+    }
+    try{
+      if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(it.menu).then(ok,fallback);
+      else fallback();
+    }catch(e){fallback()}
+  });
+}
+
+/* --- AI設定 --- */
+function openAiSettings(){
+  var s=aiSettings();
+  document.getElementById("aiKey").value=s.apiKey;
+  document.getElementById("aiModel").value=s.model;
+  document.getElementById("aiWodModel").value=s.wodModel;
+  document.getElementById("aiUseWod").checked=!!s.useWod;
+  document.getElementById("aiAuto").checked=!!s.auto;
+  document.getElementById("aiTestRes").textContent="";
+  document.getElementById("aiModal").classList.add("on");
+}
+function _readAiForm(){
+  var s=aiSettings();
+  s.apiKey=document.getElementById("aiKey").value.trim();
+  s.model=document.getElementById("aiModel").value.trim()||AI_DEF.model;
+  s.wodModel=document.getElementById("aiWodModel").value.trim()||AI_DEF.wodModel;
+  s.useWod=document.getElementById("aiUseWod").checked;
+  s.auto=document.getElementById("aiAuto").checked;
+  aiSaveSettings(s);
+  return s;
+}
+function initAi(){
+  document.getElementById("aiOpen").addEventListener("click",function(){openAiSettings()});
+  document.getElementById("aiCancel").addEventListener("click",function(){document.getElementById("aiModal").classList.remove("on")});
+  document.getElementById("aiSave").addEventListener("click",function(){
+    _readAiForm();
+    document.getElementById("aiModal").classList.remove("on");
+    _aiErr="";
+    toast("AI設定を保存しました");
+    render();
+    setTimeout(maybeAutoReco,600);
+  });
+  document.getElementById("aiTest").addEventListener("click",function(){
+    var s=_readAiForm(),res=document.getElementById("aiTestRes"),btn=this;
+    btn.disabled=true;res.style.color="var(--sub)";res.textContent="確認中…";
+    geminiJSON(s.model,'{"ok":true} というJSONだけを返してください',0).then(function(){
+      res.style.color="#16a34a";res.textContent="接続できました";btn.disabled=false;
+    },function(er){
+      res.style.color="#c84a4a";res.textContent=er.message;btn.disabled=false;
+    });
+  });
+  var mood=document.getElementById("moodInput");
+  function flush(){
+    if(_moodTm){clearTimeout(_moodTm);_moodTm=null}
+    var day=mood.getAttribute("data-day");
+    if(day)_saveMood(day,mood.value.trim());
+  }
+  mood.addEventListener("input",function(){
+    if(_moodTm)clearTimeout(_moodTm);
+    _moodTm=setTimeout(flush,1200);
+  });
+  mood.addEventListener("blur",flush);
+  document.getElementById("moodGo").addEventListener("click",function(){mood.blur();generateReco(false)});
+  /* 日付が変わってから前面に戻ったとき、「今日」を表示していたなら新しい今日へ移動 */
+  var shownToday=_todayStr();
+  document.addEventListener("visibilitychange",function(){
+    if(document.hidden)return;
+    var now=_todayStr();
+    if(now!==shownToday){
+      if(fmt(sel)===shownToday&&!document.querySelector(".modal.on")){
+        sel=new Date();sel.setHours(0,0,0,0);
+        updateDateDisplay();render();
+      }
+      shownToday=now;
+    }
+    setTimeout(maybeAutoReco,2500);
+  });
+  /* 起動時: 同期で今日の分が届くのを少し待ってから自動作成を判断 */
+  setTimeout(maybeAutoReco,3500);
+}
+
 document.getElementById("undoBtn").addEventListener("click",function(){undoDelete()});
 
 document.getElementById("syncSave").addEventListener("click",function(){
@@ -1546,8 +2084,7 @@ document.getElementById("syncSave").addEventListener("click",function(){
   var sx=0,sy=0,st=0,active=false,maxDy=0;
   function blocked(t){
     if(_tkDragState)return true;
-    if(document.getElementById("modal").classList.contains("on"))return true;
-    if(document.getElementById("trModal").classList.contains("on"))return true;
+    if(document.querySelector(".modal.on"))return true;
     if(document.querySelector(".media-viewer"))return true;
     while(t&&t.nodeType===1&&t!==document.body){
       if(t.tagName==="TEXTAREA"||t.tagName==="INPUT"||t.tagName==="SELECT")return true;
@@ -1589,6 +2126,7 @@ updateDateDisplay();
 render();
 markCalNeedsRefresh();
 initFirebase();
+initAi();
 </script>
 </body>
 </html>
