@@ -158,6 +158,26 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
 .reco-wod summary{cursor:pointer;font-weight:600}
 .reco-wodraw{white-space:pre-wrap;word-wrap:break-word;background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:6px;color:var(--text);font-size:12px;line-height:1.5}
 .reco-note{font-size:10.5px;color:var(--sub);margin-top:8px;line-height:1.5}
+.mood-b textarea{min-height:84px}
+.goal-box{margin-top:12px;border-top:1px dashed var(--bdr);padding-top:10px;font-size:12.5px;color:var(--text)}
+.goal-box .lnk{background:none;border:none;font-size:12px;color:var(--acc);font-weight:600;font-family:inherit;cursor:pointer;padding:4px 2px}
+.goal-empty{color:var(--sub);line-height:1.6;font-size:12px}
+.goal-empty .lnk{display:block;padding:6px 0 0;color:var(--acc);font-weight:600}
+.goal-h{display:flex;justify-content:space-between;align-items:center;font-weight:700;color:var(--acc);margin-bottom:4px}
+.goal-r{display:flex;gap:8px;line-height:1.5;padding:2px 0}
+.goal-r b{flex-shrink:0;font-size:11px;color:var(--sub);font-weight:600;width:28px;padding-top:1px}
+.goal-r span{white-space:pre-wrap;word-wrap:break-word;min-width:0}
+.goal-rm{margin-top:8px}
+.goal-rm summary{cursor:pointer;font-weight:600;color:var(--sub);font-size:12px}
+.goal-sum{margin-top:6px;line-height:1.6}
+.goal-ph{display:flex;gap:10px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bdr)}
+.goal-pd{flex-shrink:0;width:92px;font-size:11px;font-weight:700;color:var(--acc);line-height:1.5}
+.goal-th{font-weight:600;line-height:1.5}
+.goal-ms{color:var(--sub);font-size:12px;line-height:1.5;margin-top:2px}
+.goal-note{color:var(--sub);font-size:11.5px;margin-top:6px}
+.reco-road{background:var(--acc-lt);border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.55;color:var(--text);margin-bottom:10px}
+.tr-ai{font-size:11.5px;color:var(--sub);line-height:1.5;margin-top:5px;white-space:pre-wrap;word-wrap:break-word;border-left:2px solid var(--bdr);padding-left:7px}
+.ai-ta{width:100%;min-height:54px;padding:9px 10px;border:1px solid var(--bdr);border-radius:8px;font-size:15px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;resize:none;line-height:1.5}
 .ai-f{display:block;font-size:12px;font-weight:600;color:var(--sub);margin:12px 0 4px}
 .ai-in{width:100%;padding:10px;border:1px solid var(--bdr);border-radius:8px;font-size:15px;font-family:inherit;background:var(--bg);color:var(--text);outline:none}
 .ai-steps{font-size:12px;color:var(--sub);line-height:1.7;margin:8px 0 0 18px}
@@ -211,10 +231,11 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
   </div>
 
   <div class="card">
-    <div class="card-h"><h2>💬 今日の気分は？</h2></div>
+    <div class="card-h"><h2>💬 パーソナルトレーナーへ依頼</h2></div>
     <div class="mood-b">
-      <textarea id="moodInput" placeholder="例：脚を追い込みたい／疲れ気味なので軽めに／ジムのWODを貼り付けてもOK"></textarea>
-      <button class="reco-btn pr" id="moodGo">この気分でおすすめを作成</button>
+      <textarea id="moodInput" placeholder="例：今日は脚を追い込みたい／疲れ気味なので軽めに&#10;目標も書けます（長期：1年後にスクワット100kg、中期：3か月で80kg、短期：今月は週3回）"></textarea>
+      <button class="reco-btn pr" id="moodGo">この内容でおすすめを作成</button>
+      <div class="goal-box" id="goalBox"></div>
     </div>
   </div>
 
@@ -272,13 +293,30 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
     <input class="ai-in" type="text" id="aiWodModel" list="aiWodModels" autocomplete="off">
     <datalist id="aiWodModels"><option>gemini-2.5-flash</option><option>gemini-2.5-flash-lite</option></datalist>
     <label class="ai-chk"><input type="checkbox" id="aiAuto"> その日に初めて開いたとき、おすすめを自動で作る</label>
-    <div class="reco-note">キーはこの端末だけに保存され、Google 以外には送信されません。おすすめ作成時に、トレーニング記録と「今日の気分」が Google に送信されます。無料枠は1日の回数に上限があり、送信内容が Google のサービス改善に使われることがあります。</div>
+    <div class="reco-note">キーはこの端末だけに保存され、Google 以外には送信されません。おすすめ作成時に、トレーニング記録（添付した写真・手書きメモを含む）、目標、トレーナーへの依頼内容が Google に送信されます。無料枠は1日の回数に上限があり、送信内容が Google のサービス改善に使われることがあります。</div>
     <div class="modal-btns">
       <button class="cancel" id="aiTest">接続テスト</button>
       <button class="cancel" id="aiCancel">閉じる</button>
       <button class="ok" id="aiSave">保存</button>
     </div>
     <div id="aiTestRes" style="font-size:12px;text-align:center;min-height:18px;margin-top:8px"></div>
+  </div>
+</div>
+
+<div class="modal" id="goalModal">
+  <div class="modal-c">
+    <h3>🎯 目標</h3>
+    <label class="ai-f" style="margin-top:0">長期（半年〜1年以上）</label>
+    <textarea class="ai-ta" id="goalLong" placeholder="例：1年後にバックスクワット100kg／来年のハーフマラソン完走"></textarea>
+    <label class="ai-f">中期（1〜3か月）</label>
+    <textarea class="ai-ta" id="goalMid" placeholder="例：3か月でスクワット80kg×5回"></textarea>
+    <label class="ai-f">短期（今週〜今月）</label>
+    <textarea class="ai-ta" id="goalShort" placeholder="例：今月は週3回ジムに行く"></textarea>
+    <div class="reco-note">空欄にして保存すると、その目標は削除されます。保存後、次回のおすすめ作成時にロードマップを作り直します。</div>
+    <div class="modal-btns">
+      <button class="cancel" id="goalCancel">キャンセル</button>
+      <button class="ok" id="goalSave">保存</button>
+    </div>
   </div>
 </div>
 
@@ -289,7 +327,7 @@ body.tk-no-scroll{overflow:hidden;-webkit-overflow-scrolling:auto;touch-action:n
 /* ===== バージョン表示と自動更新 =====
    ホーム画面のWebアプリは古いページを保持し続けるため、起動時と前面復帰時に
    サーバー上の最新版を確認し、違っていれば自動で読み込み直す。 */
-var APP_VERSION="2026.11.12d";
+var APP_VERSION="2026.11.14a";
 (function(){
   var v=document.getElementById("ver");if(v)v.textContent="v"+APP_VERSION;
   var pending=null,lastChk=0;
@@ -868,6 +906,7 @@ function render(){
     entry=entry||{};
     renderTasks(entry);
     renderMood(entry);
+    renderGoals();
     renderTraining(entry);
     renderReco(entry);
   });
@@ -1246,6 +1285,8 @@ function renderTraining(entry){
         }
         h+='</div>';
       }
+      var aiTxt=_rowAiText(data);
+      if(aiTxt)h+='<div class="tr-ai">🤖 画像の読み取り\n'+escapeHtml(aiTxt)+'</div>';
       if(!data.drawing&&!data.text&&mediaArr.length===0)h+='<div class="tr-add-hint">タップしてメモや写真を追加</div>';
       h+='</div></div>';
     }
@@ -1649,7 +1690,7 @@ document.getElementById("trMediaInput").addEventListener("change",function(e){
 /* ============================================================
    AIパーソナルトレーナー（Google Gemini・無料枠）
    ------------------------------------------------------------
-   - 「今日の気分は？」: entry.mood に保存
+   - 「パーソナルトレーナーへ依頼」: entry.mood に保存（旧「今日の気分は？」）
    - 「本日のおすすめメニュー」: entry.reco に保存
    - APIキーはこの端末の localStorage のみ（Firebase には送らない）
    - 1回の作成で最大2リクエスト:
@@ -1731,7 +1772,9 @@ function _trLine(tr,id){
   var d=tr[id];if(!d)return "";
   var bits=[];
   if(d.text)bits.push(String(d.text).replace(/\s*\n\s*/g," / "));
-  else if(d.drawing)bits.push("(手書きメモあり・内容不明)");
+  var ait=_rowAiText(d);
+  if(ait)bits.push("〔画像から読み取り: "+ait.replace(/\s*\n\s*/g," / ")+"〕");
+  else if(_rowImgSig(d))bits.push(d.text?"(画像あり・未読み取り)":"(画像・手書きメモあり・未読み取り)");
   if(d.done)bits.push("[実施済]");
   return bits.join(" ");
 }
@@ -1759,7 +1802,7 @@ function buildHistory(all,dayStr){
   }
   return {recent:recent.reverse().join("\n"),cfOld:cfOld.reverse().join("\n"),count:rows.length};
 }
-function buildPrompt(dayStr,mood,hist,wod,todayEntry){
+function buildPrompt(dayStr,mood,hist,wod,todayEntry,trainer){
   var dt=new Date(dayStr+"T00:00:00");
   var already=[];
   if(todayEntry&&todayEntry.training){
@@ -1767,7 +1810,9 @@ function buildPrompt(dayStr,mood,hist,wod,todayEntry){
   }
   return "あなたは私専属のパーソナルトレーナーです。私のトレーニング記録を読み込み、今日のおすすめメニューを日本語で提案してください。\n\n"+
   "# 今日\n"+dayStr+"("+WD[dt.getDay()]+")\n\n"+
-  "# 今日の気分・リクエスト\n"+(mood?mood:"（未入力。記録から最適な内容を判断してください）")+"\n\n"+
+  "# 今日の私からの依頼\n"+(mood?mood:"（未入力。記録と目標から最適な内容を判断してください）")+"\n\n"+
+  "# 保存済みの目標\n"+(trainerHasGoals(trainer)?("長期: "+(trainer.goals.long||"（未設定）")+"\n中期: "+(trainer.goals.mid||"（未設定）")+"\n短期: "+(trainer.goals.short||"（未設定）")):"（まだありません）")+"\n\n"+
+  "# 保存済みのロードマップ\n"+_roadmapText(trainer)+"\n\n"+
   "# 今日すでに記録済みの内容\n"+(already.length?already.join("\n"):"（なし）")+"\n\n"+
   "# 直近のトレーニング記録（古い順）\n"+(hist.recent||"（まだ記録がありません）")+"\n\n"+
   (hist.cfOld?"# それ以前のクロスフィット記録\n"+hist.cfOld+"\n\n":"")+
@@ -1775,20 +1820,59 @@ function buildPrompt(dayStr,mood,hist,wod,todayEntry){
   "# 考え方\n"+
   "- 記録にある種目・重量・レップ数・セット数を踏まえ、前回から無理のない範囲で少しだけ負荷を進める（漸進性過負荷）。根拠にした過去の記録の日付と数値を reason に書く。\n"+
   "- 直近で追い込んだ部位は連続させず、間隔が空いている部位を優先する。連日続いている場合は軽め・休養も提案する。\n"+
-  "- 「今日の気分・リクエスト」を最優先で反映する。そこにWODなどが貼られていれば、それも材料にする。\n"+
+  "- 「今日の私からの依頼」を最優先で反映する。そこにWODなどが貼られていれば、それも材料にする。\n"+
+  "- 記録の〔画像から読み取り: …〕は、私が貼った写真や手書きメモをAIが文字にしたもの。実施した内容として扱うが、読み違いの可能性も考慮する。\n"+
   "- クロスフィットは、公式WODと私の過去のクロスフィット記録の傾向を分析し、私のレベルに合わせて重量や回数を調整した版を提案する。\n"+
   "- 記録が少ない・無い場合は、一般的で安全な基本メニューにし、その旨を comment に書く。重量が不明な種目は「軽め」「RPE7」などで表す。\n"+
   "- 痛みや体調不良が書かれていたら、その部位を避けるか休養を勧める。\n"+
   "- 今日やる分だけに絞る（2〜5項目）。全部位を埋めない。\n\n"+
+  "# 目標とロードマップの扱い\n"+
+  "- 「今日の私からの依頼」に目標（長期・中期・短期、期限や数値）が書かれていたら、保存済みの目標を更新して goals に返す。期間が明記されていなければ内容から長期・中期・短期に振り分ける。書かれていなければ、保存済みの目標をそのまま goals に返す。\n"+
+  "- 「今日は軽めに」のようなその日だけの希望は目標に入れない。\n"+
+  "- 目標があるときは、記録から分かる現在の水準を出発点に、目標達成までのロードマップを作る（3〜5段階。各段階に期間・重点・数値で測れる到達の目安）。長期目標から逆算し、中期・短期目標が途中の通過点になるようにする。\n"+
+  "- 保存済みのロードマップがあり、目標が変わっておらず、作り直しの指定もなければ、ロードマップは書き換えずにそのまま返す。記録から見て進み具合が大きくずれている場合だけ修正し、修正した理由を comment に書く。\n"+
+  "- 今日のメニューは、ロードマップの現在の段階に沿った内容にする。roadmap_today に、今どの段階にいて、今日のメニューがその段階の何に効くのかを書く。\n"+
+  "- 目標が現実的でない場合（期間が短すぎる等）は、否定せずに現実的な通過点を comment で提案する。\n"+
+  "- 目標が無いときは、goals の各値を空文字、roadmap を null、roadmap_today を空文字にする。\n\n"+
   "# 出力（このJSONだけを返す）\n"+
   "{\n"+
   ' "focus":"今日のテーマ（20文字以内）",\n'+
   ' "comment":"トレーナーからの一言。記録を見て気づいたことを含めて2〜3文",\n'+
   ' "items":[{"target":"記入欄ID","menu":"記入欄にそのまま貼れるメニュー。1行1種目で「種目 重量 × 回数 × セット」の形。3〜6行","reason":"この内容にした理由（1〜2文）"}],\n'+
-  ' "wod_note":"公式WODの要点と、私向けにどう調整したか（1〜2文。WODが無ければ空文字）"\n'+
+  ' "wod_note":"公式WODの要点と、私向けにどう調整したか（1〜2文。WODが無ければ空文字）",\n'+
+  ' "goals":{"long":"長期目標","mid":"中期目標","short":"短期目標"},\n'+
+  ' "roadmap":{"summary":"全体の方針（1〜2文）","phases":[{"period":"期間（例 2026年11月〜12月）","theme":"この段階の重点","milestone":"到達の目安（数値）"}]},\n'+
+  ' "roadmap_today":"今日のメニューのロードマップ上の位置づけ（1〜2文）"\n'+
   "}\n"+
   "target は次のIDのどれか: muscle_legs(脚), muscle_chest(胸), muscle_shoulder(肩), muscle_back(背中), muscle_arms(腕), running_distance(ランニングの距離。例 5km), running_time(ランニングの時間。例 30分), running_pace(ランニングのペース。例 6:00/km), crossfit_menu(クロスフィットのメニュー), other_content(その他。ストレッチ等)。\n"+
   "同じ target を2回使わない。ランニングを勧める場合は running_distance / running_time / running_pace を別々の項目にし、menu は短い値だけにする。";
+}
+function _roadmapText(t){
+  if(!t||!t.roadmap)return "（まだありません）";
+  var h=(t.stale?"【目標が変更されたため、作り直してください】\n":"")+(t.roadmap.summary||"");
+  for(var i=0;i<t.roadmap.phases.length;i++){
+    var p=t.roadmap.phases[i];
+    h+="\n- "+p.period+": "+p.theme+(p.milestone?" → "+p.milestone:"");
+  }
+  return h;
+}
+/* AIの返答から目標とロードマップを取り出して保存する */
+function _applyTrainerFromAi(j){
+  var t=trainerGet(),g=(j&&j.goals)||{},changed=false,k;
+  var ks=["long","mid","short"];
+  for(var i=0;i<ks.length;i++){
+    k=ks[i];
+    var v=String(g[k]||"").trim().slice(0,300);
+    if(/^（?未設定）?$|^なし$|^null$/.test(v))v="";
+    /* 空で返ってきても、保存済みの目標は消さない（削除は編集画面から） */
+    if(v&&v!==t.goals[k]){t.goals[k]=v;changed=true}
+  }
+  if(trainerHasGoals(t)){
+    var rm=_normRoadmap(j&&j.roadmap);
+    if(rm&&JSON.stringify(rm)!==JSON.stringify(t.roadmap)){t.roadmap=rm;changed=true}
+    if(rm&&t.stale){t.stale=false;changed=true}
+  }
+  if(changed){t.updatedAt=new Date().toISOString();trainerSave(t)}
 }
 function _normReco(j,meta){
   var items=[],seen={},src=(j&&j.items)||[];
@@ -1804,7 +1888,248 @@ function _normReco(j,meta){
   if(items.length===0)throw new Error("AIの返答にメニューが含まれていませんでした。もう一度お試しください");
   items.sort(function(a,b){return TR_ORDER.indexOf(a.target)-TR_ORDER.indexOf(b.target)});
   return {at:new Date().toISOString(),model:meta.model,mood:meta.mood||"",focus:String((j&&j.focus)||"").slice(0,40),comment:String((j&&j.comment)||"").slice(0,500),
-    items:items,wodNote:String((j&&j.wod_note)||"").slice(0,400),wod:meta.wod||""};
+    items:items,wodNote:String((j&&j.wod_note)||"").slice(0,400),wod:meta.wod||"",roadToday:String((j&&j.roadmap_today)||"").slice(0,300)};
+}
+
+/* ============================================================
+   画像の読み取り（添付写真・手書きメモ → 実施メニューの文字起こし）
+   ------------------------------------------------------------
+   Training の各欄に付いた画像を Gemini に読ませ、結果を
+   entry.training[欄ID].ai = {sig, text, at} に保存する。
+   sig は画像の組み合わせを表す印で、画像が変わったときだけ読み直す。
+   無料枠を使い切らないよう、1回のおすすめ作成で読むのは最大 AI_IMG_MAX 欄。
+   ============================================================ */
+var AI_IMG_MAX=6,AI_IMG_DAYS=45,AI_IMG_PER_ROW=3;
+function _arr(x){
+  if(!x)return [];
+  if(Array.isArray(x))return x;
+  var out=[];for(var k in x){if(Object.prototype.hasOwnProperty.call(x,k)&&x[k])out.push(x[k])}
+  return out;
+}
+function _rowImages(d){
+  var out=[],arr=_arr(d&&d.media),i,m;
+  for(i=0;i<arr.length;i++){m=arr[i];if(m&&m.type==="image"&&(m.data||m.url))out.push(m)}
+  return out;
+}
+function _rowImgSig(d){
+  if(!d)return "";
+  var parts=[],imgs=_rowImages(d),i,m;
+  for(i=0;i<imgs.length;i++){m=imgs[i];parts.push(m.id||m.path||(m.url?String(m.url).slice(-24):"d"+String(m.data).length))}
+  if(d.drawing)parts.push("h"+String(d.drawing).length);
+  return parts.join(",");
+}
+function _rowAiText(d){
+  if(!d||!d.ai||!d.ai.text)return "";
+  return d.ai.sig===_rowImgSig(d)?String(d.ai.text):"";
+}
+/* 画像を白背景のJPEG(base64)に変換。手書きメモ(透過PNG)もこれで読めるようになる */
+function _imgToJpegB64(src){
+  return new Promise(function(ok,no){
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var k=Math.min(1,1400/Math.max(img.width,img.height,1));
+        var c=document.createElement("canvas");
+        c.width=Math.max(1,Math.round(img.width*k));c.height=Math.max(1,Math.round(img.height*k));
+        var g=c.getContext("2d");
+        g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);
+        g.drawImage(img,0,0,c.width,c.height);
+        ok(c.toDataURL("image/jpeg",0.8).split(",")[1]);
+      }catch(e){no(e)}
+    };
+    img.onerror=function(){no(new Error("image load"))};
+    img.src=src;
+  });
+}
+function _imagePart(src,isUrl){
+  if(!isUrl)return _imgToJpegB64(src).then(function(b){return {inline_data:{mime_type:"image/jpeg",data:b}}});
+  /* 保存先がURLの画像: まず端末で取得を試み、取得できない場合はURLのまま Gemini に渡す */
+  return fetch(src).then(function(r){
+    if(!r.ok)throw new Error("fetch");
+    return r.blob();
+  }).then(function(bl){
+    var u=URL.createObjectURL(bl);
+    return _imgToJpegB64(u).then(function(b){URL.revokeObjectURL(u);return {inline_data:{mime_type:"image/jpeg",data:b}}},function(e){URL.revokeObjectURL(u);throw e});
+  }).catch(function(){
+    return {file_data:{mime_type:"image/jpeg",file_uri:src}};
+  });
+}
+function _trLabel(key){
+  if(TR_TARGETS[key])return TR_TARGETS[key];
+  var cat={muscle:"筋トレ",running:"ランニング",crossfit:"クロスフィット",other:"その他"};
+  return cat[key]||"トレーニング";
+}
+function _readRowImages(dayStr,key,d,model){
+  var imgs=_rowImages(d).slice(0,AI_IMG_PER_ROW),jobs=[],i;
+  for(i=0;i<imgs.length;i++)jobs.push(_imagePart(imgs[i].data||imgs[i].url,!imgs[i].data));
+  if(d.drawing&&jobs.length<AI_IMG_PER_ROW)jobs.push(_imagePart(d.drawing,false));
+  return Promise.all(jobs.map(function(p){return p.catch(function(){return null})})).then(function(parts){
+    parts=parts.filter(function(p){return !!p});
+    if(parts.length===0)return "";
+    var prompt="これは私のトレーニング記録（"+dayStr+"）の「"+_trLabel(key)+"」欄に付けた画像です。ジムのホワイトボード、アプリや時計の画面、マシンの表示、手書きメモなどが写っています。\n"+
+      "画像から、実施したトレーニング内容を読み取り、1行1項目で簡潔に書き出してください。\n"+
+      "- 種目名・重量・回数・セット数・ラウンド数・距離・時間・ペース・心拍など、読み取れる数値はすべて含める\n"+
+      "- 推測で補わない。読めない部分は書かない\n"+
+      "- トレーニング内容が読み取れない画像（風景や自撮りなど）は、何の画像かを短く書き、末尾に「(メニュー不明)」と付ける\n"+
+      "- 前置きや説明は不要。最大8行";
+    return geminiCall(model,{contents:[{role:"user",parts:[{text:prompt}].concat(parts)}],generationConfig:{temperature:0}}).then(function(txt){
+      return String(txt||"").replace(/\r/g,"").replace(/```/g,"").trim().slice(0,600);
+    });
+  });
+}
+/* 直近の記録から、まだ読み取っていない画像付きの欄を探して読み取る */
+function ensureImageNotes(all,dayStr,model){
+  var from=new Date(dayStr+"T00:00:00");from.setDate(from.getDate()-AI_IMG_DAYS);
+  var fromStr=fmt(from),todo=[],i,e,k,d,sig;
+  for(i=0;i<all.length;i++){
+    e=all[i];
+    if(!e||!e.id||!e.training||e.id>dayStr||e.id<fromStr)continue;
+    for(k in e.training){
+      d=e.training[k];
+      if(!d||typeof d!=="object")continue;
+      sig=_rowImgSig(d);
+      if(sig&&!(d.ai&&d.ai.sig===sig))todo.push({day:e.id,key:k,sig:sig});
+    }
+  }
+  if(todo.length===0)return Promise.resolve(0);
+  todo.sort(function(a,b){return a.day<b.day?1:(a.day>b.day?-1:0)});
+  var left=todo.length;
+  todo=todo.slice(0,AI_IMG_MAX);
+  var n=0,stop=false,chain=Promise.resolve();
+  todo.forEach(function(t,idx){
+    chain=chain.then(function(){
+      if(stop)return;
+      _aiStage="写真・手書きメモを読み取っています…（"+(idx+1)+"/"+todo.length+"）";_updateRecoStage();
+      return dbGet(t.day).then(function(entry){
+        var d=entry&&entry.training&&entry.training[t.key];
+        if(!d||_rowImgSig(d)!==t.sig)return;
+        return _readRowImages(t.day,t.key,d,model).then(function(txt){
+          if(!txt)return;
+          return dbGet(t.day).then(function(en){
+            if(!en||!en.training||!en.training[t.key])return;
+            var ai={sig:t.sig,text:txt,at:new Date().toISOString()};
+            en.training[t.key].ai=ai;
+            en.updatedAt=new Date().toISOString();
+            return dbPut(en).then(function(){
+              n++;
+              /* 画像本体を送り直さないよう、読み取り結果だけを書き込む */
+              try{
+                if(_fbReady&&_fbRef){
+                  var patch={updatedAt:en.updatedAt};patch["training/"+t.key+"/ai"]=ai;
+                  _fbRef.child(t.day).update(patch);
+                }
+              }catch(ex){}
+            });
+          });
+        });
+      }).catch(function(err){
+        /* 無料枠の上限に当たったら残りは次回に回す */
+        if(err&&/上限/.test(err.message||""))stop=true;
+      });
+    });
+  });
+  return chain.then(function(){return left-n});
+}
+
+/* ============================================================
+   目標とロードマップ（日をまたいで保持するトレーナー用メモ）
+   ------------------------------------------------------------
+   端末の localStorage に保存し、Firebase の reactionTrainer にも同期する。
+   「パーソナルトレーナーへ依頼」欄に目標を書くと、AI が読み取ってここを更新する。
+   ============================================================ */
+function trainerGet(){
+  var t=null;
+  try{t=JSON.parse(localStorage.getItem("rn_trainer")||"null")}catch(e){t=null}
+  if(!t||typeof t!=="object")t={};
+  if(!t.goals||typeof t.goals!=="object")t.goals={};
+  t.goals={long:String(t.goals.long||""),mid:String(t.goals.mid||""),short:String(t.goals.short||"")};
+  if(!t.roadmap||typeof t.roadmap!=="object")t.roadmap=null;
+  return t;
+}
+function trainerHasGoals(t){return !!(t.goals.long||t.goals.mid||t.goals.short)}
+function trainerSave(t,noPush){
+  t.updatedAt=t.updatedAt||new Date().toISOString();
+  try{localStorage.setItem("rn_trainer",JSON.stringify(t))}catch(e){}
+  if(!noPush){
+    try{if(_fbReady&&_fbDb)_fbDb.ref("reactionTrainer").set(JSON.parse(JSON.stringify(t)),function(){})}catch(e){}
+  }
+}
+/* 他の端末で更新された目標があれば取り込む（短時間だけ待つ） */
+function trainerPull(){
+  if(!_fbReady||!_fbDb)return Promise.resolve();
+  return _withTimeout(new Promise(function(ok,no){
+    try{_fbDb.ref("reactionTrainer").once("value",function(s){ok(s.val())},function(){no()})}catch(e){no()}
+  }),4000).then(function(r){
+    if(!r||typeof r!=="object")return;
+    var local=trainerGet();
+    if(r.updatedAt&&(!local.updatedAt||r.updatedAt>local.updatedAt)){
+      try{localStorage.setItem("rn_trainer",JSON.stringify(r))}catch(e){}
+      renderGoals();
+    }
+  }).catch(function(){});
+}
+function _normRoadmap(r){
+  if(!r||typeof r!=="object")return null;
+  var ph=[],src=_arr(r.phases),i,p;
+  for(i=0;i<src.length&&ph.length<6;i++){
+    p=src[i]||{};
+    var o={period:String(p.period||"").slice(0,40),theme:String(p.theme||"").slice(0,80),milestone:String(p.milestone||"").slice(0,140)};
+    if(o.period||o.theme||o.milestone)ph.push(o);
+  }
+  var sum=String(r.summary||"").slice(0,300);
+  if(!sum&&ph.length===0)return null;
+  return {summary:sum,phases:ph};
+}
+function renderGoals(){
+  var box=document.getElementById("goalBox");
+  if(!box)return;
+  var t=trainerGet(),h="";
+  if(!trainerHasGoals(t)){
+    h='<div class="goal-empty">目標（長期・中期・短期）を上の欄に書いて依頼すると、達成までのロードマップを作り、毎日のメニューに反映します。<button class="lnk" id="goalEdit">目標を直接入力</button></div>';
+  }else{
+    h='<div class="goal-h"><span>🎯 目標</span><button class="lnk" id="goalEdit">編集</button></div>';
+    if(t.goals.long)h+='<div class="goal-r"><b>長期</b><span>'+escapeHtml(t.goals.long)+'</span></div>';
+    if(t.goals.mid)h+='<div class="goal-r"><b>中期</b><span>'+escapeHtml(t.goals.mid)+'</span></div>';
+    if(t.goals.short)h+='<div class="goal-r"><b>短期</b><span>'+escapeHtml(t.goals.short)+'</span></div>';
+    if(t.roadmap&&!t.stale){
+      h+='<details class="goal-rm"><summary>ロードマップを見る</summary>';
+      if(t.roadmap.summary)h+='<div class="goal-sum">'+escapeHtml(t.roadmap.summary)+'</div>';
+      for(var i=0;i<t.roadmap.phases.length;i++){
+        var p=t.roadmap.phases[i];
+        h+='<div class="goal-ph"><div class="goal-pd">'+escapeHtml(p.period)+'</div><div><div class="goal-th">'+escapeHtml(p.theme)+'</div>'+(p.milestone?'<div class="goal-ms">'+escapeHtml(p.milestone)+'</div>':'')+'</div></div>';
+      }
+      h+='</details>';
+    }else{
+      h+='<div class="goal-note">ロードマップは次回のおすすめ作成時に作ります。</div>';
+    }
+  }
+  box.innerHTML=h;
+  var b=document.getElementById("goalEdit");
+  if(b)b.addEventListener("click",function(){
+    var t2=trainerGet();
+    document.getElementById("goalLong").value=t2.goals.long;
+    document.getElementById("goalMid").value=t2.goals.mid;
+    document.getElementById("goalShort").value=t2.goals.short;
+    document.getElementById("goalModal").classList.add("on");
+  });
+}
+function initGoals(){
+  document.getElementById("goalCancel").addEventListener("click",function(){document.getElementById("goalModal").classList.remove("on")});
+  document.getElementById("goalSave").addEventListener("click",function(){
+    var t=trainerGet();
+    var g={long:document.getElementById("goalLong").value.trim().slice(0,300),mid:document.getElementById("goalMid").value.trim().slice(0,300),short:document.getElementById("goalShort").value.trim().slice(0,300)};
+    var changed=g.long!==t.goals.long||g.mid!==t.goals.mid||g.short!==t.goals.short;
+    document.getElementById("goalModal").classList.remove("on");
+    if(!changed)return;
+    t.goals=g;
+    t.stale=true; /* 次回の作成時にロードマップを作り直す */
+    if(!trainerHasGoals(t))t.roadmap=null;
+    t.updatedAt=new Date().toISOString();
+    trainerSave(t);
+    renderGoals();
+    toast(trainerHasGoals(t)?"目標を保存しました。次回のおすすめ作成時にロードマップを作ります":"目標を削除しました");
+  });
+  renderGoals();
 }
 
 /* --- 作成 --- */
@@ -1818,13 +2143,20 @@ function generateReco(isAuto){
   var moodEl=document.getElementById("moodInput");
   var moodNow=moodEl?moodEl.value.trim():"";
   _saveMood(dayStr,moodNow).then(function(){
+    return trainerPull();
+  }).then(function(){
     return fetchOfficialWod(dayStr);
+  }).then(function(wod){
+    /* 添付写真・手書きメモを先に文字にしてから、記録全体を分析する */
+    return dbAll().then(function(all){return ensureImageNotes(all||[],dayStr,s.model)}).catch(function(){}).then(function(){return wod});
   }).then(function(wod){
     _aiStage="記録を分析してメニューを作成しています…";_updateRecoStage();
     return Promise.all([dbAll(),dbGet(dayStr)]).then(function(r){
       var hist=buildHistory(r[0]||[],dayStr);
-      return geminiJSON(s.model,buildPrompt(dayStr,moodNow,hist,wod,r[1])).then(function(j){
-        return _normReco(j,{model:s.model,mood:moodNow,wod:wod});
+      return geminiJSON(s.model,buildPrompt(dayStr,moodNow,hist,wod,r[1],trainerGet())).then(function(j){
+        var reco=_normReco(j,{model:s.model,mood:moodNow,wod:wod});
+        _applyTrainerFromAi(j);
+        return reco;
       });
     });
   }).then(function(reco){
@@ -1877,7 +2209,7 @@ function renderMood(entry){
   var canGen=fmt(sel)>=_todayStr();
   btn.style.display=canGen?"":"none";
   btn.disabled=_aiBusy;
-  btn.textContent=_aiBusy?"作成中…":((entry&&entry.reco&&entry.reco.items)?"この気分でおすすめを作り直す":"この気分でおすすめを作成");
+  btn.textContent=_aiBusy?"作成中…":((entry&&entry.reco&&entry.reco.items)?"この内容でおすすめを作り直す":"この内容でおすすめを作成");
 }
 
 /* --- 本日のおすすめメニュー --- */
@@ -1899,13 +2231,14 @@ function renderReco(entry){
     }else if(dayStr<today){
       h+='<div class="reco-msg">この日のおすすめはありません</div>';
     }else{
-      h+='<div class="reco-msg">過去の記録と「今日の気分」から、今日のメニューを提案します。<br><button class="reco-btn pr" data-act="gen">おすすめを作成</button></div>';
+      h+='<div class="reco-msg">過去の記録・目標・トレーナーへの依頼内容から、今日のメニューを提案します。<br><button class="reco-btn pr" data-act="gen">おすすめを作成</button></div>';
     }
     box.innerHTML=h;_bindReco(box);return;
   }
   var tr=(entry&&entry.training)||{};
   if(reco.focus)h+='<div class="reco-focus">'+escapeHtml(reco.focus)+'</div>';
   if(reco.comment)h+='<div class="reco-cmt">'+escapeHtml(reco.comment)+'</div>';
+  if(reco.roadToday)h+='<div class="reco-road">🎯 '+escapeHtml(reco.roadToday)+'</div>';
   for(var i=0;i<reco.items.length;i++){
     var it=reco.items[i],cur=(tr[it.target]&&tr[it.target].text)||"";
     var done=cur.indexOf(it.menu)!==-1;
@@ -2015,6 +2348,8 @@ function _readAiForm(){
   return s;
 }
 function initAi(){
+  initGoals();
+  setTimeout(trainerPull,3000);
   document.getElementById("aiOpen").addEventListener("click",function(){openAiSettings()});
   document.getElementById("aiCancel").addEventListener("click",function(){document.getElementById("aiModal").classList.remove("on")});
   document.getElementById("aiSave").addEventListener("click",function(){
